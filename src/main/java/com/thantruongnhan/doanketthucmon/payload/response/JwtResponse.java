@@ -18,12 +18,13 @@ public class JwtResponse {
         this.token = accessToken;
     }
 
-    public String getTokenType() {
+    // ✅ FIXED: Đổi từ getTokenType() thành getType()
+    public String getType() {
         return type;
     }
 
-    public void setTokenType(String tokenType) {
-        this.type = tokenType;
+    public void setType(String type) {
+        this.type = type;
     }
 
     public Long getId() {
@@ -54,11 +55,12 @@ public class JwtResponse {
         return roles;
     }
 
-    public String getAccessToken() {
+    // ✅ FIXED: Đổi từ getAccessToken() thành getToken()
+    public String getToken() {
         return token;
     }
 
-    public void setAccessToken(String accessToken) {
-        this.token = accessToken;
+    public void setToken(String token) {
+        this.token = token;
     }
 }
