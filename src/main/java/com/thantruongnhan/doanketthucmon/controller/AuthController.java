@@ -9,9 +9,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.thantruongnhan.doanketthucmon.dto.LoginDto;
@@ -26,6 +28,17 @@ import com.thantruongnhan.doanketthucmon.security.services.UserDetailsImpl;
 
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = {
+                "http://localhost:8081",
+                "http://localhost:3000",
+                "http://localhost:19006"
+}, allowedHeaders = "*", methods = {
+                RequestMethod.GET,
+                RequestMethod.POST,
+                RequestMethod.PUT,
+                RequestMethod.DELETE,
+                RequestMethod.OPTIONS
+}, allowCredentials = "true")
 public class AuthController {
 
         private final UserRepository userRepository;
@@ -80,7 +93,6 @@ public class AuthController {
                 }
 
                 user.setRole(roleEnum);
-
                 userRepository.save(user);
 
                 return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
@@ -89,7 +101,8 @@ public class AuthController {
         @PostMapping("login")
         public ResponseEntity<?> login(@RequestBody LoginDto loginDto) {
                 Authentication authentication = authenticationManager.authenticate(
-                                new UsernamePasswordAuthenticationToken(loginDto.getUsername(),
+                                new UsernamePasswordAuthenticationToken(
+                                                loginDto.getUsername(),
                                                 loginDto.getPassword()));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);

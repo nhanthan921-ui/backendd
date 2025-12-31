@@ -3,6 +3,7 @@ package com.thantruongnhan.doanketthucmon.security;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -14,13 +15,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.thantruongnhan.doanketthucmon.security.jwt.AuthEntryPointJwt;
 import com.thantruongnhan.doanketthucmon.security.jwt.AuthTokenFilter;
 import com.thantruongnhan.doanketthucmon.security.services.UserDetailsServiceImpl;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 import java.util.Arrays;
 
 @Configuration
@@ -59,12 +60,35 @@ public class WebSecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", // React frontend
-                "http://localhost:3001", // Socket.IO server (Node)
-                "http://localhost:4000"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+
+        // QUAN TRỌNG: Cho phép cả localhost và Railway frontend
+        configuration.setAllowedOrigins(Arrays.asList(
+                "http://localhost:8081",
+                "http://localhost:3000",
+                "http://localhost:19006", // Expo
+                "https://your-frontend-domain.com" // Thay bằng domain thật của bạn nếu có
+        ));
+
+        // Hoặc dùng pattern cho development (uncomment dòng dưới nếu muốn)
+        // configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+
+        configuration.setAllowedMethods(Arrays.asList(
+                "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"));
+
+        configuration.setAllowedHeaders(Arrays.asList(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "Origin",
+                "Access-Control-Request-Method",
+                "Access-Control-Request-Headers"));
+
+        configuration.setExposedHeaders(Arrays.asList(
+                "Access-Control-Allow-Origin",
+                "Access-Control-Allow-Credentials"));
+
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
@@ -74,23 +98,19 @@ public class WebSecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .cors() // BẬT CORS (Spring sẽ tự dùng CorsConfigurationSource)
-                .and()
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ← QUAN TRỌNG: Dùng lambda
                 .csrf(csrf -> csrf.disable())
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/auth/**",
-                                "/api/test/**",
-                                "/uploads/**",
-                                // === Cho MoMo ===
-                                "/api/momo/**",
-                                "/api/payos/**",
-                                "/webhook/**")
-                        .permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/test/**").permitAll()
+                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/api/momo/**", "/api/payos/**").permitAll()
+                        .requestMatchers("/webhook/**").permitAll()
                         .requestMatchers("/api/customer/orders").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Preflight requests
+
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/employee/**").hasAnyRole("ADMIN", "EMPLOYEE")
                         .requestMatchers("/api/customer/**").hasAnyRole("ADMIN", "EMPLOYEE", "CUSTOMER")
