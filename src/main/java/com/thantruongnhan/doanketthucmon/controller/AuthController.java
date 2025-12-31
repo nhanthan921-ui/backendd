@@ -46,18 +46,10 @@ public class AuthController {
 
         @PostMapping("register")
         public ResponseEntity<?> register(@RequestBody RegisterDto registerDto) {
-                // Kiểm tra username đã tồn tại
                 if (userRepository.existsByUsername(registerDto.getUsername())) {
                         return ResponseEntity
                                         .badRequest()
                                         .body(new MessageResponse("Username is taken!"));
-                }
-
-                // Kiểm tra email đã tồn tại
-                if (userRepository.existsByEmail(registerDto.getEmail())) {
-                        return ResponseEntity
-                                        .badRequest()
-                                        .body(new MessageResponse("Email is already in use!"));
                 }
 
                 User user = new User();
@@ -65,8 +57,9 @@ public class AuthController {
                 user.setPassword(passwordEncoder.encode(registerDto.getPassword()));
                 user.setEmail(registerDto.getEmail());
 
-                // Luôn set role là USER - không cho phép user tự chọn role khi đăng ký
-                user.setRole(Role.USER);
+                // set role từ string trong RegisterDto (ví dụ: "ADMIN" hoặc "USER")
+                Role roleEnum = Role.valueOf(registerDto.getRole().toUpperCase());
+                user.setRole(roleEnum);
 
                 userRepository.save(user);
 
