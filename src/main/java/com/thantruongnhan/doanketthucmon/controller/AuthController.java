@@ -53,7 +53,7 @@ public class AuthController {
                                         .body(new MessageResponse("Username is taken!"));
                 }
 
-                // Kiểm tra email đã tồn tại (optional, nên có)
+                // Kiểm tra email đã tồn tại
                 if (userRepository.existsByEmail(registerDto.getEmail())) {
                         return ResponseEntity
                                         .badRequest()
@@ -65,20 +65,8 @@ public class AuthController {
                 user.setPassword(passwordEncoder.encode(registerDto.getPassword()));
                 user.setEmail(registerDto.getEmail());
 
-                // Set role: Nếu không truyền role hoặc role rỗng, mặc định là USER
-                Role roleEnum;
-                if (registerDto.getRole() == null || registerDto.getRole().trim().isEmpty()) {
-                        roleEnum = Role.USER; // Mặc định
-                } else {
-                        try {
-                                roleEnum = Role.valueOf(registerDto.getRole().toUpperCase());
-                        } catch (IllegalArgumentException e) {
-                                // Nếu role không hợp lệ, mặc định là USER
-                                roleEnum = Role.USER;
-                        }
-                }
-
-                user.setRole(roleEnum);
+                // Luôn set role là USER - không cho phép user tự chọn role khi đăng ký
+                user.setRole(Role.USER);
 
                 userRepository.save(user);
 
