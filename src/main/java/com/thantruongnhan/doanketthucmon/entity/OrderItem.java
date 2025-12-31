@@ -12,7 +12,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Entity
 @Table(name = "order_items")
-@Deprecated // Đánh dấu không dùng nữa
 public class OrderItem {
 
     @Id

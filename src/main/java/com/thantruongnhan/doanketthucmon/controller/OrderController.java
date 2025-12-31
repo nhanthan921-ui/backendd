@@ -1,173 +1,220 @@
 package com.thantruongnhan.doanketthucmon.controller;
 
-import com.thantruongnhan.doanketthucmon.dto.request.OrderRequest;
-import com.thantruongnhan.doanketthucmon.dto.response.ApiResponse;
-import com.thantruongnhan.doanketthucmon.dto.response.OrderResponse;
+import com.thantruongnhan.doanketthucmon.entity.Order;
+import com.thantruongnhan.doanketthucmon.entity.Product;
 import com.thantruongnhan.doanketthucmon.entity.enums.OrderStatus;
+import com.thantruongnhan.doanketthucmon.entity.enums.PaymentMethod;
 import com.thantruongnhan.doanketthucmon.service.OrderService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
+import com.thantruongnhan.doanketthucmon.service.ProductService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/orders")
-@RequiredArgsConstructor
-@Tag(name = "Order Management", description = "APIs for managing movie ticket orders")
+@RequestMapping("/api/customer/orders")
+@CrossOrigin(origins = "http://localhost:3000")
 public class OrderController {
 
     private final OrderService orderService;
+    private final ProductService productService;
+    private final OrderWebSocketController orderWebSocketController;
 
-    @PostMapping
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Create new order", description = "Create a new movie ticket order")
-    public ResponseEntity<ApiResponse<OrderResponse>> createOrder(
-            @Valid @RequestBody OrderRequest request,
-            Authentication authentication) {
-        Long userId = getUserIdFromAuth(authentication);
-        OrderResponse response = orderService.createOrder(request, userId);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Order created successfully", response));
+    @Autowired
+    public OrderController(OrderService orderService,
+            ProductService productService,
+            OrderWebSocketController orderWebSocketController) {
+        this.orderService = orderService;
+        this.productService = productService;
+        this.orderWebSocketController = orderWebSocketController;
     }
 
-    @GetMapping("/{orderId}")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get order by ID")
-    public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Long orderId) {
-        OrderResponse response = orderService.getOrderById(orderId);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    @GetMapping("/code/{orderCode}")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get order by order code")
-    public ResponseEntity<ApiResponse<OrderResponse>> getOrderByCode(@PathVariable String orderCode) {
-        OrderResponse response = orderService.getOrderByCode(orderCode);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    @GetMapping("/my-orders")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get current user's orders")
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> getMyOrders(Authentication authentication) {
-        Long userId = getUserIdFromAuth(authentication);
-        List<OrderResponse> responses = orderService.getUserOrders(userId);
-        return ResponseEntity.ok(ApiResponse.success(responses));
-    }
-
-    @GetMapping("/my-orders/status/{status}")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get current user's orders by status")
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> getMyOrdersByStatus(
-            @PathVariable OrderStatus status,
-            Authentication authentication) {
-        Long userId = getUserIdFromAuth(authentication);
-        List<OrderResponse> responses = orderService.getUserOrdersByStatus(userId, status);
-        return ResponseEntity.ok(ApiResponse.success(responses));
-    }
-
+    // Lấy danh sách tất cả đơn hàng
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Get all orders (Admin only)")
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> getAllOrders() {
-        List<OrderResponse> responses = orderService.getAllOrders();
-        return ResponseEntity.ok(ApiResponse.success(responses));
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public List<Order> getAllOrders() {
+        return orderService.getAllOrders();
     }
 
-    @GetMapping("/status/{status}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Get orders by status (Admin only)")
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> getOrdersByStatus(@PathVariable OrderStatus status) {
-        List<OrderResponse> responses = orderService.getOrdersByStatus(status);
-        return ResponseEntity.ok(ApiResponse.success(responses));
+    // Xem chi tiết đơn hàng theo ID
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public Order getOrderById(@PathVariable Long id) {
+        return orderService.getOrderById(id);
     }
 
-    @PutMapping("/{orderId}/status")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Update order status (Admin only)")
-    public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(
+    // Tạo đơn hàng mới → realtime gửi cho nhân viên (barista)
+    @PostMapping
+    public Order createOrder(@RequestBody Order order) {
+        System.out.println("Received order: " + order);
+        Order savedOrder = orderService.createOrder(order);
+        orderWebSocketController.sendNewOrder(savedOrder);
+        return savedOrder;
+    }
+
+    // Thêm sản phẩm vào đơn hàng
+    @PostMapping("/{orderId}/add-product")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public Order addProductToOrder(@PathVariable Long orderId,
+            @RequestBody Map<String, Object> body) {
+        Long productId = ((Number) body.get("productId")).longValue();
+        Integer quantity = (Integer) body.get("quantity");
+
+        Product product = productService.getProductById(productId);
+        Order updatedOrder = orderService.addProductToOrder(orderId, product, quantity);
+
+        orderWebSocketController.sendOrderUpdate(updatedOrder); // realtime update
+        return updatedOrder;
+    }
+
+    // Thêm món vào đơn hàng đã tồn tại
+    @PostMapping("/{orderId}/add-items")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public ResponseEntity<?> addItemsToExistingOrder(
             @PathVariable Long orderId,
-            @RequestParam OrderStatus status) {
-        OrderResponse response = orderService.updateOrderStatus(orderId, status);
-        return ResponseEntity.ok(ApiResponse.success("Order status updated", response));
+            @RequestBody List<Map<String, Object>> newItems) {
+
+        try {
+            System.out.println("🔵 Nhận yêu cầu thêm món vào đơn #" + orderId);
+            System.out.println("🔵 Items: " + newItems);
+
+            Order existingOrder = orderService.getOrderById(orderId);
+
+            if (existingOrder == null) {
+                return ResponseEntity.status(404).body("Không tìm thấy đơn hàng #" + orderId);
+            }
+
+            System.out.println("🔵 Đơn hiện tại: status=" + existingOrder.getStatus());
+
+            // Không cho phép thêm món vào đơn đã thanh toán hoặc đã hủy
+            if (existingOrder.getStatus() == OrderStatus.PAID) {
+                return ResponseEntity.badRequest().body("Không thể thêm món vào đơn đã thanh toán");
+            }
+
+            if (existingOrder.getStatus() == OrderStatus.CANCELLED) {
+                return ResponseEntity.badRequest().body("Không thể thêm món vào đơn đã hủy");
+            }
+
+            // Thêm từng sản phẩm vào đơn
+            for (Map<String, Object> item : newItems) {
+                Long productId = ((Number) item.get("productId")).longValue();
+                Integer quantity = (Integer) item.get("quantity");
+
+                System.out.println("🔵 Thêm sản phẩm #" + productId + " x" + quantity);
+
+                Product product = productService.getProductById(productId);
+                existingOrder = orderService.addProductToOrder(orderId, product, quantity);
+            }
+
+            // Nếu đơn đã completed, chuyển về preparing
+            if (existingOrder.getStatus() == OrderStatus.COMPLETED) {
+                System.out.println("🔵 Đơn đã hoàn thành, chuyển về PREPARING");
+                existingOrder = orderService.updateOrderStatus(orderId, OrderStatus.PREPARING);
+            }
+
+            System.out.println("✅ Thêm món thành công! Total: " + existingOrder.getTotalAmount());
+
+            // Gửi update qua WebSocket
+            orderWebSocketController.sendOrderUpdate(existingOrder);
+
+            return ResponseEntity.ok(existingOrder);
+
+        } catch (Exception e) {
+            System.err.println("❌ Lỗi khi thêm món: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Lỗi: " + e.getMessage());
+        }
     }
 
-    @PostMapping("/{orderId}/cancel")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Cancel order")
-    public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(
-            @PathVariable Long orderId,
-            Authentication authentication) {
-        Long userId = getUserIdFromAuth(authentication);
-        OrderResponse response = orderService.cancelOrder(orderId, userId);
-        return ResponseEntity.ok(ApiResponse.success("Order cancelled successfully", response));
+    // Cập nhật thông tin đơn hàng
+    @PutMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE','CUSTOMER')")
+    public Order updateOrderStatus(
+            @PathVariable Long id,
+            @RequestParam("status") OrderStatus status,
+            @RequestParam(value = "paymentMethod", defaultValue = "CASH") PaymentMethod paymentMethod) {
+
+        return orderService.updateOrder(id, status, paymentMethod);
     }
 
-    @PostMapping("/{orderId}/confirm-payment")
+    // Xóa đơn hàng
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public void deleteOrder(@PathVariable Long id) {
+        orderService.deleteOrder(id);
+        orderWebSocketController.sendOrderDeleted(id); // realtime delete
+    }
+
+    // Tìm kiếm đơn hàng theo từ khóa
+    @GetMapping("/search")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public List<Order> searchOrders(@RequestParam("keyword") String keyword) {
+        return orderService.searchOrders(keyword);
+    }
+
+    // Các hành động cập nhật trạng thái đơn hàng
+    @PutMapping("/{id}/confirm")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public Order confirmOrder(@PathVariable Long id) {
+        Order updated = orderService.updateOrderStatus(id, OrderStatus.CONFIRMED);
+        orderWebSocketController.sendOrderUpdate(updated);
+        return updated;
+    }
+
+    @PutMapping("/{id}/prepare")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public Order prepareOrder(@PathVariable Long id) {
+        Order updated = orderService.updateOrderStatus(id, OrderStatus.PREPARING);
+        orderWebSocketController.sendOrderUpdate(updated);
+        return updated;
+    }
+
+    @PutMapping("/{id}/complete")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public Order completeOrder(@PathVariable Long id) {
+        Order updated = orderService.updateOrderStatus(id, OrderStatus.COMPLETED);
+        orderWebSocketController.sendOrderUpdate(updated);
+        return updated;
+    }
+
+    @PutMapping("/{id}/pay")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public ResponseEntity<?> customerPayOrder(
+            @PathVariable Long id,
+            @RequestParam String paymentMethod) {
+
+        try {
+            // Chuyển đổi String sang enum PaymentMethod (CASH hoặc TRANSFER)
+            PaymentMethod method = PaymentMethod.valueOf(paymentMethod.toUpperCase());
+
+            orderService.updateOrder(id, OrderStatus.PAID, method);
+            return ResponseEntity.ok("Thanh toán thành công!");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("Phương thức thanh toán không hợp lệ!");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Lỗi khi cập nhật thanh toán!");
+        }
+    }
+
+    @PutMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public Order cancelOrder(@PathVariable Long id) {
+        Order updated = orderService.updateOrderStatus(id, OrderStatus.CANCELLED);
+        orderWebSocketController.sendOrderUpdate(updated);
+        return updated;
+    }
+
+    @GetMapping("/pending")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Confirm payment (Admin only)")
-    public ResponseEntity<ApiResponse<OrderResponse>> confirmPayment(@PathVariable Long orderId) {
-        OrderResponse response = orderService.confirmPayment(orderId);
-        return ResponseEntity.ok(ApiResponse.success("Payment confirmed", response));
+    public List<Order> getPendingOrders() {
+        return orderService.getAllOrders()
+                .stream()
+                .filter(o -> o.getStatus() == OrderStatus.PENDING)
+                .collect(Collectors.toList());
     }
 
-    @GetMapping("/between-dates")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Get orders between dates (Admin only)")
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> getOrdersBetweenDates(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-        List<OrderResponse> responses = orderService.getOrdersBetweenDates(startDate, endDate);
-        return ResponseEntity.ok(ApiResponse.success(responses));
-    }
-
-    @GetMapping("/revenue/total")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Get total revenue (Admin only)")
-    public ResponseEntity<ApiResponse<Double>> getTotalRevenue() {
-        Double revenue = orderService.getTotalRevenue();
-        return ResponseEntity.ok(ApiResponse.success("Total revenue", revenue));
-    }
-
-    @GetMapping("/revenue/between-dates")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Get revenue between dates (Admin only)")
-    public ResponseEntity<ApiResponse<Double>> getRevenueBetweenDates(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-        Double revenue = orderService.getRevenueBetweenDates(startDate, endDate);
-        return ResponseEntity.ok(ApiResponse.success("Revenue", revenue));
-    }
-
-    @GetMapping("/count/status/{status}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Count orders by status (Admin only)")
-    public ResponseEntity<ApiResponse<Long>> countOrdersByStatus(@PathVariable OrderStatus status) {
-        long count = orderService.countOrdersByStatus(status);
-        return ResponseEntity.ok(ApiResponse.success("Count", count));
-    }
-
-    @DeleteMapping("/{orderId}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Delete order (Admin only)")
-    public ResponseEntity<ApiResponse<Void>> deleteOrder(@PathVariable Long orderId) {
-        orderService.deleteOrder(orderId);
-        return ResponseEntity.ok(ApiResponse.success("Order deleted successfully", null));
-    }
-
-    // Helper method
-    private Long getUserIdFromAuth(Authentication authentication) {
-        // Implement logic to extract userId from authentication
-        // This depends on your security configuration
-        return 1L; // Placeholder
-    }
 }

@@ -1,275 +1,599 @@
 package com.thantruongnhan.doanketthucmon.service.impl;
 
-import com.thantruongnhan.doanketthucmon.dto.request.OrderRequest;
-import com.thantruongnhan.doanketthucmon.dto.response.OrderResponse;
 import com.thantruongnhan.doanketthucmon.entity.*;
 import com.thantruongnhan.doanketthucmon.entity.enums.OrderStatus;
-import com.thantruongnhan.doanketthucmon.entity.enums.TicketStatus;
-import com.thantruongnhan.doanketthucmon.exception.ResourceNotFoundException;
-import com.thantruongnhan.doanketthucmon.mapper.OrderMapper;
-import com.thantruongnhan.doanketthucmon.repository.*;
+import com.thantruongnhan.doanketthucmon.entity.enums.PaymentMethod;
+import com.thantruongnhan.doanketthucmon.entity.enums.PaymentStatus;
+import com.thantruongnhan.doanketthucmon.repository.BillRepository;
+import com.thantruongnhan.doanketthucmon.repository.OrderRepository;
+import com.thantruongnhan.doanketthucmon.repository.ProductRepository;
+import com.thantruongnhan.doanketthucmon.repository.PromotionRepository;
 import com.thantruongnhan.doanketthucmon.service.OrderService;
-import lombok.RequiredArgsConstructor;
+import com.thantruongnhan.doanketthucmon.controller.OrderWebSocketController;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.Map;
+
+import com.thantruongnhan.doanketthucmon.repository.TableRepository;
+import com.thantruongnhan.doanketthucmon.entity.enums.Status;
 
 @Service
-@RequiredArgsConstructor
-@Transactional
 public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
-    private final UserRepository userRepository;
-    private final ShowTimeRepository showTimeRepository;
-    private final SeatRepository seatRepository;
-    private final ComboRepository comboRepository;
-    private final TicketRepository ticketRepository;
-    private final OrderMapper orderMapper;
+    private final OrderWebSocketController orderWebSocketController;
+    private final BillRepository billRepository;
+    private final ProductRepository productRepository;
+    private final TableRepository tableRepository;
+    private final PromotionRepository promotionRepository;
+
+    @Autowired
+    public OrderServiceImpl(
+            OrderRepository orderRepository,
+            OrderWebSocketController orderWebSocketController,
+            BillRepository billRepository,
+            ProductRepository productRepository,
+            TableRepository tableRepository,
+            PromotionRepository promotionRepository) {
+        this.orderRepository = orderRepository;
+        this.orderWebSocketController = orderWebSocketController;
+        this.billRepository = billRepository;
+        this.productRepository = productRepository;
+        this.tableRepository = tableRepository;
+        this.promotionRepository = promotionRepository;
+    }
 
     @Override
-    public OrderResponse createOrder(OrderRequest request, Long userId) {
-        // Lấy user
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    @Transactional
+    public Order createOrder(Order order) {
+        System.out.println("========== CREATE ORDER START ==========");
 
-        // Tạo order mới
-        Order order = Order.builder()
-                .user(user)
-                .orderCode(generateOrderCode())
-                .customerName(request.getCustomerName())
-                .customerPhone(request.getCustomerPhone())
-                .customerEmail(request.getCustomerEmail())
-                .status(OrderStatus.PENDING)
-                .notes(request.getNotes())
-                .totalAmount(BigDecimal.ZERO)
-                .discountAmount(BigDecimal.ZERO)
-                .finalAmount(BigDecimal.ZERO)
-                .tickets(new ArrayList<>())
-                .orderCombos(new ArrayList<>())
-                .build();
+        // 1. Validate và load Table
+        if (order.getTable() != null && order.getTable().getId() != null) {
+            TableEntity table = tableRepository.findById(order.getTable().getId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy bàn!"));
 
-        // Tạo tickets từ danh sách seatIds
-        if (request.getSeatIds() != null && !request.getSeatIds().isEmpty()) {
-            for (Long seatId : request.getSeatIds()) {
-                Seat seat = seatRepository.findById(seatId)
-                        .orElseThrow(() -> new ResourceNotFoundException("Seat not found"));
+            // ✅ KIỂM TRA XEM BÀN ĐÃ CÓ ĐƠN CHƯA THANH TOÁN CHƯA
+            List<Order> existingOrders = orderRepository.findByTableIdAndStatusNotIn(
+                    table.getId(),
+                    Arrays.asList(OrderStatus.PAID, OrderStatus.CANCELLED));
 
-                // Kiểm tra ghế đã được đặt chưa
-                if (seat.getStatus() != com.thantruongnhan.doanketthucmon.entity.enums.SeatStatus.AVAILABLE) {
-                    throw new IllegalStateException("Seat " + seat.getSeatName() + " is not available");
+            if (!existingOrders.isEmpty()) {
+                // Có đơn chưa thanh toán -> GỘP VÀO ĐƠN CŨ
+                Order existingOrder = existingOrders.get(0);
+                System.out.println(
+                        "🔄 Bàn " + table.getNumber() + " đã có đơn #" + existingOrder.getId() + " chưa thanh toán");
+                System.out.println("📦 Gộp món mới vào đơn hiện tại...");
+
+                // Thêm các món mới vào đơn hiện có
+                if (order.getItems() != null && !order.getItems().isEmpty()) {
+                    for (OrderItem newItem : order.getItems()) {
+                        if (newItem.getProduct() != null && newItem.getProduct().getId() != null) {
+                            Product product = productRepository.findById(newItem.getProduct().getId())
+                                    .orElseThrow(() -> new RuntimeException(
+                                            "Sản phẩm ID " + newItem.getProduct().getId() + " không tồn tại!"));
+
+                            // Kiểm tra xem sản phẩm đã có trong đơn chưa
+                            boolean found = false;
+                            for (OrderItem existingItem : existingOrder.getItems()) {
+                                if (existingItem.getProduct().getId().equals(product.getId())) {
+                                    // Cộng dồn số lượng
+                                    existingItem.setQuantity(existingItem.getQuantity() + newItem.getQuantity());
+                                    existingItem.calculateSubtotal();
+                                    found = true;
+                                    System.out
+                                            .println("✅ Cộng dồn: " + product.getName() + " x" + newItem.getQuantity());
+                                    break;
+                                }
+                            }
+
+                            if (!found) {
+                                // Thêm món mới
+                                OrderItem itemToAdd = new OrderItem();
+                                itemToAdd.setOrder(existingOrder);
+                                itemToAdd.setProduct(product);
+                                itemToAdd.setQuantity(newItem.getQuantity());
+                                itemToAdd.setPrice(product.getPrice());
+                                itemToAdd.calculateSubtotal();
+                                existingOrder.getItems().add(itemToAdd);
+                                System.out
+                                        .println("✅ Thêm món mới: " + product.getName() + " x" + newItem.getQuantity());
+                            }
+                        }
+                    }
                 }
 
-                // Tạo ticket
-                Ticket ticket = Ticket.builder()
-                        .order(order)
-                        .showTime(seat.getShowTime())
-                        .seat(seat)
-                        .user(user)
-                        .ticketCode(generateTicketCode())
-                        .price(seat.getPrice())
-                        .status(TicketStatus.BOOKED)
-                        .qrCode(generateQRCode())
-                        .build();
+                // ✅ CHUYỂN TRẠNG THÁI VỀ PREPARING NẾU ĐÃ COMPLETED
+                if (existingOrder.getStatus() == OrderStatus.COMPLETED) {
+                    existingOrder.setStatus(OrderStatus.PREPARING);
+                    System.out.println("🔄 Đơn đã hoàn thành -> chuyển về PREPARING");
+                }
 
-                order.getTickets().add(ticket);
+                // Tính lại tổng tiền
+                existingOrder.recalcTotal();
+                BigDecimal originalTotal = existingOrder.getTotalAmount();
+                System.out.println("💰 Tổng tiền gốc sau khi gộp: " + originalTotal);
 
-                // Cập nhật trạng thái ghế
-                seat.setStatus(com.thantruongnhan.doanketthucmon.entity.enums.SeatStatus.BOOKED);
-                seatRepository.save(seat);
+                // Áp dụng promotion nếu có
+                if (existingOrder.getPromotion() != null && existingOrder.getPromotion().getId() != null) {
+                    Promotion promotion = promotionRepository.findById(existingOrder.getPromotion().getId())
+                            .orElse(null);
+
+                    if (promotion != null && Boolean.TRUE.equals(promotion.getIsActive())) {
+                        BigDecimal discount = BigDecimal.ZERO;
+
+                        if (promotion.getDiscountPercentage() != null
+                                && promotion.getDiscountPercentage().compareTo(BigDecimal.ZERO) > 0) {
+                            discount = originalTotal.multiply(promotion.getDiscountPercentage())
+                                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                        } else if (promotion.getDiscountAmount() != null
+                                && promotion.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+                            discount = promotion.getDiscountAmount();
+                        }
+
+                        BigDecimal finalTotal = originalTotal.subtract(discount);
+                        if (finalTotal.compareTo(BigDecimal.ZERO) < 0) {
+                            finalTotal = BigDecimal.ZERO;
+                        }
+
+                        existingOrder.setTotalAmount(finalTotal);
+                        System.out.println("🎁 Discount: " + discount);
+                        System.out.println("💰 Final Total: " + finalTotal);
+                    } else {
+                        existingOrder.setPromotion(null);
+                    }
+                }
+
+                // Cập nhật thời gian
+                existingOrder.setUpdatedAt(LocalDateTime.now());
+
+                // Lưu đơn hàng đã gộp
+                Order savedOrder = orderRepository.save(existingOrder);
+
+                System.out.println("✅ Đã gộp món vào đơn #" + savedOrder.getId());
+                System.out.println("========== CREATE ORDER END (MERGED) ==========");
+
+                // Gửi WebSocket update thay vì new order
+                orderWebSocketController.sendOrderUpdate(savedOrder);
+
+                return savedOrder;
+            }
+
+            // Nếu không có đơn nào -> tạo mới bình thường
+            table.setStatus(Status.OCCUPIED);
+            table.setUpdatedAt(LocalDateTime.now());
+            tableRepository.save(table);
+            order.setTable(table);
+        }
+
+        // 2. Xử lý OrderItems cho đơn mới
+        if (order.getItems() != null && !order.getItems().isEmpty()) {
+            System.out.println("📦 Processing " + order.getItems().size() + " items...");
+
+            List<OrderItem> processedItems = new ArrayList<>();
+
+            for (OrderItem item : order.getItems()) {
+                if (item.getProduct() != null && item.getProduct().getId() != null) {
+                    Product product = productRepository.findById(item.getProduct().getId())
+                            .orElseThrow(() -> new RuntimeException(
+                                    "Sản phẩm ID " + item.getProduct().getId() + " không tồn tại!"));
+
+                    item.setProduct(product);
+                    item.setPrice(product.getPrice());
+                    item.setOrder(order);
+                    item.calculateSubtotal();
+
+                    processedItems.add(item);
+                }
+            }
+
+            order.setItems(processedItems);
+        }
+
+        // 3. Xử lý Promotion (nếu có)
+        if (order.getPromotion() != null && order.getPromotion().getId() != null) {
+            Promotion promotion = promotionRepository.findById(order.getPromotion().getId())
+                    .orElse(null);
+
+            if (promotion != null && Boolean.TRUE.equals(promotion.getIsActive())) {
+                order.setPromotion(promotion);
+                System.out.println("🎁 Promotion applied: " + promotion.getName());
             }
         }
 
-        // Tạo orderCombos từ danh sách combos
-        if (request.getCombos() != null && !request.getCombos().isEmpty()) {
-            for (OrderRequest.ComboItem comboItem : request.getCombos()) {
-                Combo combo = comboRepository.findById(comboItem.getComboId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Combo not found"));
-
-                OrderCombo orderCombo = OrderCombo.builder()
-                        .order(order)
-                        .combo(combo)
-                        .quantity(comboItem.getQuantity())
-                        .price(combo.getPrice())
-                        .totalPrice(combo.getPrice().multiply(BigDecimal.valueOf(comboItem.getQuantity())))
-                        .build();
-
-                order.getOrderCombos().add(orderCombo);
-            }
-        }
-
-        // Tính tổng tiền
+        // 4. Tính tổng tiền (trước khi áp promotion)
         order.recalcTotal();
+        BigDecimal originalTotal = order.getTotalAmount();
+        System.out.println("💰 Original Total: " + originalTotal);
 
-        // Lưu order
+        // 5. Áp dụng promotion (nếu có)
+        if (order.getPromotion() != null) {
+            Promotion promo = order.getPromotion();
+            BigDecimal discount = BigDecimal.ZERO;
+
+            if (promo.getDiscountPercentage() != null && promo.getDiscountPercentage().compareTo(BigDecimal.ZERO) > 0) {
+                discount = originalTotal.multiply(promo.getDiscountPercentage())
+                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            } else if (promo.getDiscountAmount() != null && promo.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+                discount = promo.getDiscountAmount();
+            }
+
+            BigDecimal finalTotal = originalTotal.subtract(discount);
+            if (finalTotal.compareTo(BigDecimal.ZERO) < 0) {
+                finalTotal = BigDecimal.ZERO;
+            }
+
+            order.setTotalAmount(finalTotal);
+            System.out.println("🎁 Discount: " + discount);
+            System.out.println("💰 Final Total: " + finalTotal);
+        }
+
+        // 6. Set thời gian
+        LocalDateTime now = LocalDateTime.now();
+        order.setCreatedAt(now);
+        order.setUpdatedAt(now);
+
+        // 7. Set trạng thái mặc định
+        if (order.getStatus() == null) {
+            order.setStatus(OrderStatus.PENDING);
+        }
+
+        // 8. Lưu order mới
         Order savedOrder = orderRepository.save(order);
 
-        return orderMapper.toResponse(savedOrder);
+        System.out.println("✅ Order saved with ID: " + savedOrder.getId());
+        System.out.println("========== CREATE ORDER END ==========");
+
+        orderWebSocketController.sendNewOrder(savedOrder);
+
+        return savedOrder;
+    }
+
+    /**
+     * Tính lại tổng tiền sau khi áp dụng khuyến mãi (nếu có).
+     */
+    private BigDecimal applyPromotion(Order order, BigDecimal originalTotal) {
+        if (order.getPromotion() == null) {
+            return originalTotal;
+        }
+
+        try {
+            Promotion promo = order.getPromotion();
+
+            // Nếu khuyến mãi có ngày hết hạn → kiểm tra
+            if (promo.getEndDate() != null && promo.getEndDate().isBefore(LocalDate.now())) {
+                // Hết hạn thì bỏ khuyến mãi
+                order.setPromotion(null);
+                return originalTotal;
+            }
+
+            // Nếu là giảm theo %
+            if (promo.getDiscountPercentage() != null && promo.getDiscountPercentage().compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal discountAmount = originalTotal.multiply(promo.getDiscountPercentage())
+                        .divide(BigDecimal.valueOf(100));
+                return originalTotal.subtract(discountAmount);
+            }
+
+            // Nếu là giảm theo số tiền cố định
+            if (promo.getDiscountAmount() != null && promo.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal discounted = originalTotal.subtract(promo.getDiscountAmount());
+                return discounted.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : discounted;
+            }
+
+            return originalTotal;
+        } catch (Exception e) {
+            System.err.println("⚠️ Lỗi khi áp dụng khuyến mãi: " + e.getMessage());
+            return originalTotal;
+        }
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public OrderResponse getOrderById(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-        return orderMapper.toResponse(order);
-    }
+    @Transactional
+    public Order updateOrder(Long id, OrderStatus status, PaymentMethod paymentMethod) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng có ID: " + id));
 
-    @Override
-    @Transactional(readOnly = true)
-    public OrderResponse getOrderByCode(String orderCode) {
-        Order order = orderRepository.findByOrderCode(orderCode)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with code: " + orderCode));
-        return orderMapper.toResponse(order);
-    }
+        LocalDateTime now = LocalDateTime.now();
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<OrderResponse> getUserOrders(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        List<Order> orders = orderRepository.findByUserOrderByCreatedAtDesc(user);
-        return orders.stream()
-                .map(orderMapper::toResponse)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<OrderResponse> getUserOrdersByStatus(Long userId, OrderStatus status) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        List<Order> orders = orderRepository.findByUserAndStatusOrderByCreatedAtDesc(user, status);
-        return orders.stream()
-                .map(orderMapper::toResponse)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<OrderResponse> getAllOrders() {
-        return orderRepository.findAll().stream()
-                .map(orderMapper::toResponse)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<OrderResponse> getOrdersByStatus(OrderStatus status) {
-        return orderRepository.findByStatusOrderByCreatedAtDesc(status).stream()
-                .map(orderMapper::toResponse)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public OrderResponse updateOrderStatus(Long orderId, OrderStatus status) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-
+        // 1️⃣ Cập nhật trạng thái
         order.setStatus(status);
+        order.setUpdatedAt(now);
 
+        // 🧩 FIX: Load lại Promotion từ DB nếu có
+        if (order.getPromotion() != null && order.getPromotion().getId() != null) {
+            Promotion freshPromo = promotionRepository.findById(order.getPromotion().getId())
+                    .orElse(null);
+            if (freshPromo != null && Boolean.TRUE.equals(freshPromo.getIsActive())) {
+                order.setPromotion(freshPromo);
+            } else {
+                order.setPromotion(null); // Nếu không tồn tại hoặc không active → bỏ luôn
+            }
+        }
+
+        // 2️⃣ Tính lại tổng tiền
+        order.recalcTotal();
+        BigDecimal originalTotal = order.getTotalAmount();
+        BigDecimal finalTotal = applyPromotion(order, originalTotal);
+        order.setTotalAmount(finalTotal);
+
+        // 3️⃣ Nếu trạng thái là PAID → tạo Bill nếu chưa có
+        if (status == OrderStatus.PAID) {
+            if (billRepository.existsByOrderId(order.getId())) {
+                throw new RuntimeException("Đơn hàng này đã được tạo hóa đơn trước đó!");
+            }
+
+            order.setPaidAt(now);
+
+            Bill bill = Bill.builder()
+                    .order(order)
+                    .totalAmount(finalTotal)
+                    .paymentMethod(paymentMethod)
+                    .paymentStatus(PaymentStatus.PAID)
+                    .issuedAt(now)
+                    .notes("Hóa đơn tự động cho đơn #" + order.getId())
+                    .createdAt(now)
+                    .updatedAt(now)
+                    .build();
+
+            billRepository.save(bill);
+
+            // ✅ Giải phóng bàn
+            freeOrUpdateTable(order, Status.FREE);
+        }
+
+        // 4️⃣ Nếu đơn bị hủy → giải phóng bàn
+        else if (status == OrderStatus.CANCELLED) {
+            freeOrUpdateTable(order, Status.FREE);
+        }
+
+        // 5️⃣ Nếu hoàn thành → giữ bàn OCCUPIED cho tới khi thanh toán
+        else if (status == OrderStatus.COMPLETED) {
+            freeOrUpdateTable(order, Status.OCCUPIED);
+        }
+
+        // 6️⃣ Lưu lại đơn hàng
+        Order updated = orderRepository.save(order);
+
+        // 7️⃣ Phát qua WebSocket để UI cập nhật real-time
+        orderWebSocketController.sendOrderUpdate(updated);
+
+        return updated;
+    }
+
+    /**
+     * Cập nhật trạng thái bàn an toàn
+     */
+    private void freeOrUpdateTable(Order order, Status status) {
+        if (order.getTable() != null && order.getTable().getId() != null) {
+            TableEntity table = tableRepository.findById(order.getTable().getId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy bàn!"));
+            table.setStatus(status);
+            table.setUpdatedAt(LocalDateTime.now());
+            tableRepository.save(table);
+        }
+    }
+
+    @Override
+    public void deleteOrder(Long id) {
+        orderRepository.deleteById(id);
+        orderWebSocketController.sendOrderDeleted(id);
+    }
+
+    @Override
+    public Order getOrderById(Long id) {
+        return orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+    }
+
+    @Override
+    public List<Order> getAllOrders() {
+        return orderRepository.findAll();
+    }
+
+    @Override
+    public List<Order> searchOrders(String keyword) {
+        return orderRepository.searchOrders(keyword.toLowerCase());
+    }
+
+    @Override
+    public Order updateOrderStatus(Long id, OrderStatus status) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng có ID: " + id));
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // ✅ CHỈ CẬP NHẬT STATUS, KHÔNG ĐỘNG VÀO PROMOTION
+        order.setStatus(status);
+        order.setUpdatedAt(now);
+
+        // Xử lý logic bàn
         if (status == OrderStatus.COMPLETED) {
-            order.setPaidAt(LocalDateTime.now());
+            freeOrUpdateTable(order, Status.OCCUPIED);
         } else if (status == OrderStatus.CANCELLED) {
-            order.setCancelledAt(LocalDateTime.now());
-            // Giải phóng ghế khi hủy đơn
-            order.getTickets().forEach(ticket -> {
-                Seat seat = ticket.getSeat();
-                seat.setStatus(com.thantruongnhan.doanketthucmon.entity.enums.SeatStatus.AVAILABLE);
-                seatRepository.save(seat);
-            });
+            freeOrUpdateTable(order, Status.FREE);
         }
 
+        // Lưu đơn hàng
+        Order updated = orderRepository.save(order);
+
+        // Phát WebSocket
+        orderWebSocketController.sendOrderUpdate(updated);
+
+        return updated;
+    }
+
+    @Transactional
+    public Order updateOrderStatus(Long id, OrderStatus status, PaymentMethod paymentMethod) {
+        return updateOrder(id, status, paymentMethod);
+    }
+
+    @Override
+    @Transactional
+    public Order addMultipleProductsToOrder(Long orderId, List<Map<String, Object>> newItems) {
+        System.out.println("========== ADD MULTIPLE PRODUCTS START ==========");
+
+        // 1. Tải đơn hàng hiện tại
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng có ID: " + orderId));
+
+        System.out.println("📦 Đơn hàng hiện tại: #" + order.getId() + " - Status: " + order.getStatus());
+
+        // 2. Kiểm tra trạng thái đơn hàng
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new RuntimeException("Không thể thêm món vào đơn đã thanh toán");
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new RuntimeException("Không thể thêm món vào đơn đã hủy");
+        }
+
+        // 3. Lưu trạng thái ban đầu
+        boolean wasCompleted = (order.getStatus() == OrderStatus.COMPLETED);
+
+        // 4. Thêm từng sản phẩm vào đơn
+        for (Map<String, Object> item : newItems) {
+            Long productId = ((Number) item.get("productId")).longValue();
+            Integer quantity = (Integer) item.get("quantity");
+
+            System.out.println("➕ Thêm sản phẩm #" + productId + " x" + quantity);
+
+            // Load sản phẩm
+            Product product = productRepository.findById(productId)
+                    .orElseThrow(() -> new RuntimeException("Sản phẩm ID " + productId + " không tồn tại!"));
+
+            // Kiểm tra xem sản phẩm đã có trong đơn chưa
+            boolean productExists = false;
+            for (OrderItem existingItem : order.getItems()) {
+                if (existingItem.getProduct().getId().equals(productId)) {
+                    // Cộng dồn số lượng
+                    existingItem.setQuantity(existingItem.getQuantity() + quantity);
+                    existingItem.calculateSubtotal();
+                    productExists = true;
+                    System.out.println("✅ Đã cộng dồn số lượng sản phẩm #" + productId);
+                    break;
+                }
+            }
+
+            // Nếu chưa có, thêm mới
+            if (!productExists) {
+                OrderItem newItem = new OrderItem();
+                newItem.setOrder(order);
+                newItem.setProduct(product);
+                newItem.setQuantity(quantity);
+                newItem.setPrice(product.getPrice());
+                newItem.calculateSubtotal();
+                order.getItems().add(newItem);
+                System.out.println("✅ Đã thêm sản phẩm mới #" + productId);
+            }
+        }
+
+        // 5. Tính lại tổng tiền
+        order.recalcTotal();
+        BigDecimal originalTotal = order.getTotalAmount();
+        System.out.println("💰 Tổng tiền gốc: " + originalTotal);
+
+        // 6. Áp dụng promotion nếu có
+        if (order.getPromotion() != null && order.getPromotion().getId() != null) {
+            Promotion promotion = promotionRepository.findById(order.getPromotion().getId())
+                    .orElse(null);
+
+            if (promotion != null && Boolean.TRUE.equals(promotion.getIsActive())) {
+                order.setPromotion(promotion);
+                BigDecimal finalTotal = applyPromotion(order, originalTotal);
+                order.setTotalAmount(finalTotal);
+                System.out.println("🎁 Đã áp dụng khuyến mãi: " + promotion.getName());
+                System.out.println("💰 Tổng tiền sau khuyến mãi: " + finalTotal);
+            } else {
+                order.setPromotion(null);
+            }
+        }
+
+        // 7. Nếu đơn đã hoàn thành, chuyển về đang chuẩn bị
+        if (wasCompleted) {
+            order.setStatus(OrderStatus.PREPARING);
+            System.out.println("🔄 Đơn đã hoàn thành -> chuyển về PREPARING");
+        }
+
+        // 8. Cập nhật thời gian
+        order.setUpdatedAt(LocalDateTime.now());
+
+        // 9. Lưu đơn hàng
         Order updatedOrder = orderRepository.save(order);
-        return orderMapper.toResponse(updatedOrder);
+
+        System.out.println("✅ Đã lưu đơn hàng với tổng tiền: " + updatedOrder.getTotalAmount());
+        System.out.println("========== ADD MULTIPLE PRODUCTS END ==========");
+
+        // 10. Phát sự kiện WebSocket
+        orderWebSocketController.sendOrderUpdate(updatedOrder);
+
+        return updatedOrder;
     }
 
     @Override
-    public OrderResponse cancelOrder(Long orderId, Long userId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+    @Transactional
+    public Order addProductToOrder(Long orderId, Product product, int quantity) {
+        System.out.println("========== ADD SINGLE PRODUCT START ==========");
 
-        // Kiểm tra quyền hủy đơn
-        if (!order.getUser().getId().equals(userId)) {
-            throw new IllegalStateException("You don't have permission to cancel this order");
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng có ID: " + orderId));
+
+        // Kiểm tra trạng thái
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new RuntimeException("Không thể thêm món vào đơn đã thanh toán");
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new RuntimeException("Không thể thêm món vào đơn đã hủy");
         }
 
-        // Chỉ cho phép hủy đơn ở trạng thái PENDING
-        if (order.getStatus() != OrderStatus.PENDING) {
-            throw new IllegalStateException("Cannot cancel order with status: " + order.getStatus());
+        boolean wasCompleted = (order.getStatus() == OrderStatus.COMPLETED);
+
+        // Kiểm tra sản phẩm đã có chưa
+        boolean productExists = false;
+        for (OrderItem existingItem : order.getItems()) {
+            if (existingItem.getProduct().getId().equals(product.getId())) {
+                existingItem.setQuantity(existingItem.getQuantity() + quantity);
+                existingItem.calculateSubtotal();
+                productExists = true;
+                break;
+            }
         }
 
-        return updateOrderStatus(orderId, OrderStatus.CANCELLED);
-    }
+        if (!productExists) {
+            OrderItem item = new OrderItem();
+            item.setOrder(order);
+            item.setProduct(product);
+            item.setQuantity(quantity);
+            item.setPrice(product.getPrice());
+            item.calculateSubtotal();
+            order.getItems().add(item);
+        }
 
-    @Override
-    public OrderResponse confirmPayment(Long orderId) {
-        return updateOrderStatus(orderId, OrderStatus.COMPLETED);
-    }
+        // Tính lại tổng
+        order.recalcTotal();
+        BigDecimal finalTotal = applyPromotion(order, order.getTotalAmount());
+        order.setTotalAmount(finalTotal);
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<OrderResponse> getOrdersBetweenDates(LocalDateTime startDate, LocalDateTime endDate) {
-        return orderRepository.findOrdersBetweenDates(startDate, endDate).stream()
-                .map(orderMapper::toResponse)
-                .collect(Collectors.toList());
-    }
+        // Nếu đã hoàn thành -> chuyển về preparing
+        if (wasCompleted) {
+            order.setStatus(OrderStatus.PREPARING);
+        }
 
-    @Override
-    @Transactional(readOnly = true)
-    public Double getTotalRevenue() {
-        return orderRepository.findAll().stream()
-                .filter(order -> order.getStatus() == OrderStatus.COMPLETED)
-                .mapToDouble(order -> order.getFinalAmount().doubleValue())
-                .sum();
-    }
+        order.setUpdatedAt(LocalDateTime.now());
+        Order updated = orderRepository.save(order);
 
-    @Override
-    @Transactional(readOnly = true)
-    public Double getRevenueBetweenDates(LocalDateTime startDate, LocalDateTime endDate) {
-        return orderRepository.findOrdersBetweenDates(startDate, endDate).stream()
-                .filter(order -> order.getStatus() == OrderStatus.COMPLETED)
-                .mapToDouble(order -> order.getFinalAmount().doubleValue())
-                .sum();
-    }
+        System.out.println("✅ Thêm sản phẩm thành công");
+        System.out.println("========== ADD SINGLE PRODUCT END ==========");
 
-    @Override
-    @Transactional(readOnly = true)
-    public long countOrdersByStatus(OrderStatus status) {
-        return orderRepository.countByStatus(status);
-    }
-
-    @Override
-    public void deleteOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-
-        // Soft delete - chỉ đổi status
-        order.setStatus(OrderStatus.CANCELLED);
-        order.setCancelledAt(LocalDateTime.now());
-        orderRepository.save(order);
-    }
-
-    // Helper methods
-    private String generateOrderCode() {
-        String code;
-        do {
-            code = "ORD" + System.currentTimeMillis();
-        } while (orderRepository.existsByOrderCode(code));
-        return code;
-    }
-
-    private String generateTicketCode() {
-        return "TKT" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-    }
-
-    private String generateQRCode() {
-        return UUID.randomUUID().toString().toUpperCase();
+        orderWebSocketController.sendOrderUpdate(updated);
+        return updated;
     }
 }

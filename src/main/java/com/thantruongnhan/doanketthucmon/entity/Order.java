@@ -9,53 +9,37 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 @Entity
 @Table(name = "orders")
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(onlyExplicitlyIncluded = true)
 public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @EqualsAndHashCode.Include
-    @ToString.Include
     private Long id;
 
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @ManyToOne(optional = false, fetch = FetchType.EAGER)
+    @JoinColumn(name = "table_id")
+    private TableEntity table;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String orderCode;
-
-    @Column(length = 100)
-    private String customerName;
-
-    @Column(length = 20)
-    private String customerPhone;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
+    private User employee;
 
     @Column(length = 100)
-    private String customerEmail;
+    private String customerName; // Thêm field này nếu chưa có
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "order_status", nullable = false, length = 20) // ✅ FIX: status -> order_status
+    @Column(nullable = false, length = 20)
     private OrderStatus status = OrderStatus.PENDING;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
-    @Column(precision = 12, scale = 2)
-    private BigDecimal discountAmount = BigDecimal.ZERO;
-
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal finalAmount = BigDecimal.ZERO;
-
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "promotion_id")
     private Promotion promotion;
 
@@ -71,53 +55,28 @@ public class Order {
 
     private LocalDateTime paidAt;
 
-    private LocalDateTime cancelledAt;
-
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @JsonIgnoreProperties("order")
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @JsonIgnoreProperties("order") // Tránh vòng lặp JSON
     @Builder.Default
-    private List<Ticket> tickets = new ArrayList<>();
-
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @JsonIgnoreProperties("order")
-    @Builder.Default
-    private List<OrderCombo> orderCombos = new ArrayList<>();
+    private List<OrderItem> items = new ArrayList<>();
 
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnoreProperties("order")
     private Payment payment;
 
+    // Tính lại tổng tiền
     public void recalcTotal() {
-        BigDecimal ticketTotal = BigDecimal.ZERO;
-        BigDecimal comboTotal = BigDecimal.ZERO;
-
-        if (tickets != null && !tickets.isEmpty()) {
-            ticketTotal = tickets.stream()
-                    .map(ticket -> BigDecimal.valueOf(ticket.getPrice()))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-
-        if (orderCombos != null && !orderCombos.isEmpty()) {
-            comboTotal = orderCombos.stream()
-                    .map(orderCombo -> {
-                        orderCombo.calculateTotalPrice();
-                        return orderCombo.getTotalPrice();
-                    })
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-
-        this.totalAmount = ticketTotal.add(comboTotal);
-
-        if (discountAmount == null) {
-            discountAmount = BigDecimal.ZERO;
-        }
-        this.finalAmount = this.totalAmount.subtract(discountAmount);
-
-        if (this.finalAmount.compareTo(BigDecimal.ZERO) < 0) {
-            this.finalAmount = BigDecimal.ZERO;
+        if (items != null && !items.isEmpty()) {
+            this.totalAmount = items.stream()
+                    .peek(OrderItem::calculateSubtotal) // tính lại subtotal từng item
+                    .map(OrderItem::getSubtotal) // lấy subtotal
+                    .reduce(BigDecimal.ZERO, BigDecimal::add); // cộng dồn
+        } else {
+            this.totalAmount = BigDecimal.ZERO;
         }
     }
 
+    // Tự động set thời gian khi tạo mới
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
@@ -127,11 +86,9 @@ public class Order {
         if (updatedAt == null) {
             updatedAt = now;
         }
-        if (orderCode == null) {
-            orderCode = "ORD" + System.currentTimeMillis();
-        }
     }
 
+    // Tự động update thời gian khi cập nhật
     @PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
