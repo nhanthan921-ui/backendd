@@ -38,18 +38,18 @@ public class Ticket {
     private User user;
 
     @Column(nullable = false, unique = true)
-    private String ticketCode; // Mã vé: CGV123456, LTE789012
+    private String ticketCode;
 
     @Column(nullable = false)
-    private Double price; // Giá vé
+    private Double price;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "ticket_status", nullable = false) // ✅ FIX: status -> ticket_status
     private TicketStatus status; // BOOKED, USED, CANCELLED
 
-    private String qrCode; // QR code để check-in
+    private String qrCode;
 
-    private LocalDateTime usedAt; // Thời gian sử dụng vé
+    private LocalDateTime usedAt;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

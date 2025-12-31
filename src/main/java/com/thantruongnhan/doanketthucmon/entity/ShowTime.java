@@ -31,24 +31,24 @@ public class ShowTime {
     private Cinema cinema;
 
     @Column(nullable = false)
-    private LocalDate showDate; // 20/12/2024
+    private LocalDate showDate;
 
-    @Column(nullable = false)
+    @Column(name = "show_time", nullable = false) // ✅ FIX: thêm name để tránh conflict
     private LocalTime showTime; // 09:00, 11:30, 14:00...
 
     @Column(nullable = false)
-    private String roomNumber; // Phòng 1, 2, 3...
+    private String roomNumber;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "show_format", nullable = false) // ✅ FIX: format -> show_format
     private ShowFormat format; // 2D, 3D
 
     @Column(nullable = false)
-    private Double basePrice; // Giá cơ bản
+    private Double basePrice;
 
-    private Integer totalSeats = 0; // Tổng số ghế
+    private Integer totalSeats = 0;
 
-    private Integer availableSeats = 0; // Số ghế còn trống
+    private Integer availableSeats = 0;
 
     @Column(nullable = false)
     private Boolean isActive = true;
@@ -69,4 +69,5 @@ public class ShowTime {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
 }
