@@ -2,6 +2,8 @@ package com.thantruongnhan.doanketthucmon.service;
 
 import java.util.List;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import com.thantruongnhan.doanketthucmon.entity.Movie;
 import com.thantruongnhan.doanketthucmon.entity.enums.MovieStatus;
 
@@ -11,9 +13,13 @@ public interface MovieService {
 
     Movie getMovieById(Long id);
 
-    Movie createMovie(Movie movie);
+    Movie createMovie(
+            String title, String description, Integer duration, Double rating, MovieStatus status,
+            List<Long> genreIds, MultipartFile poster);
 
-    Movie updateMovie(Long id, Movie movie);
+    Movie updateMovie(
+            Long id, String title, String description, Integer duration, Double rating, MovieStatus status,
+            List<Long> genreIds, MultipartFile poster);
 
     void deleteMovie(Long id);
 
