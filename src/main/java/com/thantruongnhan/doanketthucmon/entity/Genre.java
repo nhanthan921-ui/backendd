@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.util.Set;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 @Entity
 @Table(name = "genres")
 @Getter
@@ -21,5 +23,6 @@ public class Genre {
     private String name; // Action, Comedy, Horror...
 
     @ManyToMany(mappedBy = "genres")
+    @JsonIgnore
     private Set<Movie> movies;
 }
