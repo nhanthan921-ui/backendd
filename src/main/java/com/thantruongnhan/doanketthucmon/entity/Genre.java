@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.util.Set;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 @Entity
 @Table(name = "genres")
 @Getter
@@ -21,5 +23,6 @@ public class Genre {
     private String name; // Action, Comedy, Horror...
 
     @ManyToMany(mappedBy = "genres")
+    @JsonBackReference
     private Set<Movie> movies;
 }

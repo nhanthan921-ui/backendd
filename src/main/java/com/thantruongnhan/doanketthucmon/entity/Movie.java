@@ -3,6 +3,8 @@ package com.thantruongnhan.doanketthucmon.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.Set;
+
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.thantruongnhan.doanketthucmon.entity.enums.MovieStatus;
 
 @Entity
@@ -34,5 +36,6 @@ public class Movie {
 
     @ManyToMany
     @JoinTable(name = "movie_genres", joinColumns = @JoinColumn(name = "movie_id"), inverseJoinColumns = @JoinColumn(name = "genre_id"))
+    @JsonManagedReference
     private Set<Genre> genres;
 }
