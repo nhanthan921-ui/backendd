@@ -9,7 +9,7 @@ import com.thantruongnhan.doanketthucmon.service.GenreService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/genres")
+@RequestMapping("/api/customer/genres")
 @RequiredArgsConstructor
 @CrossOrigin
 public class GenreController {
