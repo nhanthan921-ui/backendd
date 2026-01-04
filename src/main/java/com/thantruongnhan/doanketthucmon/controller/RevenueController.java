@@ -10,7 +10,7 @@ import java.util.*;
 
 @RestController
 @RequestMapping("/api/admin/revenue")
-@PreAuthorize("hasRole('ADMIN')") // chỉ admin mới xem được
+@PreAuthorize("hasRole('ADMIN')")
 public class RevenueController {
 
     @Autowired

@@ -10,7 +10,7 @@ import com.thantruongnhan.doanketthucmon.service.RoomService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/rooms")
+@RequestMapping("/api/customer/rooms")
 @RequiredArgsConstructor
 @CrossOrigin
 public class RoomController {

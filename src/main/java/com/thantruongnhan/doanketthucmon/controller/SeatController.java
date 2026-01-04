@@ -11,7 +11,7 @@ import com.thantruongnhan.doanketthucmon.service.SeatService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/seats")
+@RequestMapping("/api/customer/seats")
 @RequiredArgsConstructor
 @CrossOrigin
 public class SeatController {

@@ -10,7 +10,7 @@ import com.thantruongnhan.doanketthucmon.service.CinemaService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/cinemas")
+@RequestMapping("/api/customer/cinemas")
 @RequiredArgsConstructor
 @CrossOrigin
 public class CinemaController {
