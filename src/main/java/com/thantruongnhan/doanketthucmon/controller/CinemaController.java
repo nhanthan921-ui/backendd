@@ -31,21 +31,17 @@ public class CinemaController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public Cinema createCinema(
-            @RequestParam String name,
-            @RequestParam String address) {
-
-        return cinemaService.createCinema(name, address);
+    public Cinema createCinema(@RequestBody Cinema cinema) {
+        return cinemaService.createCinema(cinema);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public Cinema updateCinema(
             @PathVariable Long id,
-            @RequestParam String name,
-            @RequestParam String address) {
+            @RequestBody Cinema cinema) {
 
-        return cinemaService.updateCinema(id, name, address);
+        return cinemaService.updateCinema(id, cinema);
     }
 
     @DeleteMapping("/{id}")

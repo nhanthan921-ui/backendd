@@ -27,25 +27,21 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
-    public Cinema createCinema(String name, String address) {
+    public Cinema createCinema(Cinema cinema) {
 
-        if (cinemaRepository.existsByName(name)) {
+        if (cinemaRepository.existsByName(cinema.getName())) {
             throw new RuntimeException("Cinema already exists");
         }
-
-        Cinema cinema = new Cinema();
-        cinema.setName(name);
-        cinema.setAddress(address);
 
         return cinemaRepository.save(cinema);
     }
 
     @Override
-    public Cinema updateCinema(Long id, String name, String address) {
+    public Cinema updateCinema(Long id, Cinema cinema) {
 
         Cinema existing = getCinemaById(id);
-        existing.setName(name);
-        existing.setAddress(address);
+        existing.setName(cinema.getName());
+        existing.setAddress(cinema.getAddress());
 
         return cinemaRepository.save(existing);
     }

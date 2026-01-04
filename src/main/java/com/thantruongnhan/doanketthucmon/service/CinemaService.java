@@ -5,14 +5,13 @@ import com.thantruongnhan.doanketthucmon.entity.Cinema;
 import java.util.List;
 
 public interface CinemaService {
-
     List<Cinema> getAllCinemas();
 
     Cinema getCinemaById(Long id);
 
-    Cinema createCinema(String name, String address);
+    Cinema createCinema(Cinema cinema);
 
-    Cinema updateCinema(Long id, String name, String address);
+    Cinema updateCinema(Long id, Cinema cinema);
 
     void deleteCinema(Long id);
 }
