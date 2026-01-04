@@ -41,7 +41,7 @@ public class CategoryController {
         return categoryService.createCategory(name, description, image);
     }
 
-    // 🟡 Cập nhật danh mục (chỉ Admin)
+    // Cập nhật danh mục (chỉ Admin)
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public Category updateCategory(

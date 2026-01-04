@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
 
 import com.thantruongnhan.doanketthucmon.entity.Movie;
 import com.thantruongnhan.doanketthucmon.entity.enums.MovieStatus;
@@ -32,7 +33,7 @@ public class MovieController {
         return movieService.getMovieById(id);
     }
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
     public Movie createMovie(
             @RequestParam("title") String title,
@@ -42,11 +43,16 @@ public class MovieController {
             @RequestParam("status") MovieStatus status,
             @RequestParam("genreIds") List<Long> genreIds,
             @RequestParam(value = "poster", required = false) MultipartFile poster) {
+
+        System.out.println("poster null? " + (poster == null));
+        System.out.println("poster empty? " + (poster != null && poster.isEmpty()));
+        System.out.println("poster name: " + (poster != null ? poster.getOriginalFilename() : "null"));
+
         return movieService.createMovie(
                 title, description, duration, rating, status, genreIds, poster);
     }
 
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
     public Movie updateMovie(
             @PathVariable Long id,
@@ -57,6 +63,7 @@ public class MovieController {
             @RequestParam("status") MovieStatus status,
             @RequestParam("genreIds") List<Long> genreIds,
             @RequestParam(value = "poster", required = false) MultipartFile poster) {
+
         return movieService.updateMovie(
                 id, title, description, duration, rating, status, genreIds, poster);
     }
