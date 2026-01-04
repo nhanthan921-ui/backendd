@@ -17,4 +17,5 @@ public interface TableService {
     TableEntity occupyTable(Long id); // chọn bàn
 
     TableEntity freeTable(Long id); // trả bàn
+
 }
