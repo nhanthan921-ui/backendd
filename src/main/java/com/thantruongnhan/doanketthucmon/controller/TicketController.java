@@ -12,7 +12,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/customer/tickets")
 @RequiredArgsConstructor
-@CrossOrigin
+@CrossOrigin(origins = "http://localhost:8081")
 public class TicketController {
 
     private final TicketService ticketService;

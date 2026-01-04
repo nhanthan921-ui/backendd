@@ -11,6 +11,7 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/admin/revenue")
 @PreAuthorize("hasRole('ADMIN')")
+@CrossOrigin(origins = "http://localhost:8081")
 public class RevenueController {
 
     @Autowired

@@ -11,8 +11,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/customer/cinemas")
+@CrossOrigin(origins = "http://localhost:8081")
 @RequiredArgsConstructor
-@CrossOrigin
 public class CinemaController {
 
     private final CinemaService cinemaService;
