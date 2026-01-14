@@ -24,7 +24,7 @@ public class RoomController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public Room getRoomById(@PathVariable Long id) {
         return roomService.getRoomById(id);
     }

@@ -24,7 +24,7 @@ public class SeatController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE',, 'CUSTOMER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public Seat getSeatById(@PathVariable Long id) {
         return seatService.getSeatById(id);
     }
