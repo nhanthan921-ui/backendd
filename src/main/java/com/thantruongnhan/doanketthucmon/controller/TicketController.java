@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import com.thantruongnhan.doanketthucmon.dto.CreateTicketRequest;
 import com.thantruongnhan.doanketthucmon.entity.Ticket;
 import com.thantruongnhan.doanketthucmon.service.TicketService;
 
@@ -33,11 +34,15 @@ public class TicketController {
 
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
-    public Ticket createTicket(
-            @RequestParam Long showtimeId,
-            @RequestParam Long seatId,
-            @RequestParam Long userId) {
-        return ticketService.createTicket(showtimeId, seatId, userId);
+    public ResponseEntity<Ticket> createTicket(
+            @RequestBody CreateTicketRequest request) {
+
+        Ticket ticket = ticketService.createTicket(
+                request.getShowtimeId(),
+                request.getSeatId(),
+                request.getUserId());
+
+        return ResponseEntity.ok(ticket);
     }
 
     @DeleteMapping("/{id}")
