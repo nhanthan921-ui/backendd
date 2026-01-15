@@ -21,4 +21,9 @@ public class Ticket {
     private Seat seat;
 
     private Integer price;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User user;
+
 }
