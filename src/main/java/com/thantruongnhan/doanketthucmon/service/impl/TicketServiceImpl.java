@@ -6,11 +6,17 @@ import org.springframework.stereotype.Service;
 import com.thantruongnhan.doanketthucmon.entity.Seat;
 import com.thantruongnhan.doanketthucmon.entity.Showtime;
 import com.thantruongnhan.doanketthucmon.entity.Ticket;
+import com.thantruongnhan.doanketthucmon.entity.enums.SeatStatus;
+import com.thantruongnhan.doanketthucmon.entity.enums.TicketStatus;
 import com.thantruongnhan.doanketthucmon.repository.SeatRepository;
 import com.thantruongnhan.doanketthucmon.repository.ShowtimeRepository;
 import com.thantruongnhan.doanketthucmon.repository.TicketRepository;
+import com.thantruongnhan.doanketthucmon.repository.UserRepository;
 import com.thantruongnhan.doanketthucmon.service.TicketService;
+import com.thantruongnhan.doanketthucmon.entity.User;
+import java.util.UUID;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -20,6 +26,7 @@ public class TicketServiceImpl implements TicketService {
     private final TicketRepository ticketRepository;
     private final ShowtimeRepository showtimeRepository;
     private final SeatRepository seatRepository;
+    private final UserRepository userRepository;
 
     @Override
     public List<Ticket> getAllTickets() {
@@ -33,24 +40,38 @@ public class TicketServiceImpl implements TicketService {
     }
 
     @Override
-    public Ticket createTicket(Ticket ticket) {
+    public Ticket createTicket(Long showtimeId, Long seatId, Long userId) {
 
-        if (ticket.getShowtime() == null || ticket.getShowtime().getId() == null) {
-            throw new RuntimeException("Showtime is required");
-        }
-
-        if (ticket.getSeat() == null || ticket.getSeat().getId() == null) {
-            throw new RuntimeException("Seat is required");
-        }
-
-        Showtime showtime = showtimeRepository.findById(ticket.getShowtime().getId())
+        Showtime showtime = showtimeRepository.findById(showtimeId)
                 .orElseThrow(() -> new RuntimeException("Showtime not found"));
 
-        Seat seat = seatRepository.findById(ticket.getSeat().getId())
+        Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() -> new RuntimeException("Seat not found"));
 
+        if (seat.getStatus() != SeatStatus.AVAILABLE) {
+            throw new RuntimeException("Seat is not available");
+        }
+
+        // chống đặt trùng ghế
+        if (ticketRepository.existsByShowtimeIdAndSeatId(showtimeId, seatId)) {
+            throw new RuntimeException("Seat already booked for this showtime");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Ticket ticket = new Ticket();
         ticket.setShowtime(showtime);
         ticket.setSeat(seat);
+        ticket.setUser(user);
+        ticket.setPrice(showtime.getPrice());
+        ticket.setStatus(TicketStatus.PENDING);
+        ticket.setBookedAt(LocalDateTime.now());
+        ticket.setTicketCode(UUID.randomUUID().toString());
+
+        // cập nhật ghế
+        seat.setStatus(SeatStatus.RESERVED);
+        seatRepository.save(seat);
 
         return ticketRepository.save(ticket);
     }

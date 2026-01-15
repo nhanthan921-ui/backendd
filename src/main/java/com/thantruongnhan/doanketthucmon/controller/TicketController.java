@@ -33,8 +33,11 @@ public class TicketController {
 
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
-    public Ticket createTicket(@RequestBody Ticket ticket) {
-        return ticketService.createTicket(ticket);
+    public Ticket createTicket(
+            @RequestParam Long showtimeId,
+            @RequestParam Long seatId,
+            @RequestParam Long userId) {
+        return ticketService.createTicket(showtimeId, seatId, userId);
     }
 
     @DeleteMapping("/{id}")

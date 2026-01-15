@@ -1,5 +1,6 @@
 package com.thantruongnhan.doanketthucmon.entity;
 
+import com.thantruongnhan.doanketthucmon.entity.enums.SeatStatus;
 import com.thantruongnhan.doanketthucmon.entity.enums.SeatType;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -20,6 +21,9 @@ public class Seat {
 
     @Enumerated(EnumType.STRING)
     private SeatType type; // NORMAL, VIP
+
+    @Enumerated(EnumType.STRING)
+    private SeatStatus status;
 
     @ManyToOne
     private Room room;
