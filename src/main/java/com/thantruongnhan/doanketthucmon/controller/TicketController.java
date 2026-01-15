@@ -1,6 +1,8 @@
 package com.thantruongnhan.doanketthucmon.controller;
 
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,5 +47,12 @@ public class TicketController {
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public List<Ticket> getTicketsByShowtime(@PathVariable Long showtimeId) {
         return ticketService.getTicketsByShowtime(showtimeId);
+    }
+
+    @GetMapping("/user/{userId}")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN')")
+    public ResponseEntity<List<Ticket>> getTicketsByUserId(@PathVariable Long userId) {
+        List<Ticket> tickets = ticketService.getTicketsByUserId(userId);
+        return ResponseEntity.ok(tickets);
     }
 }

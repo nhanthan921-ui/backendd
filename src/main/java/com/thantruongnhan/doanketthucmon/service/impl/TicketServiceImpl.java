@@ -64,4 +64,8 @@ public class TicketServiceImpl implements TicketService {
     public List<Ticket> getTicketsByShowtime(Long showtimeId) {
         return ticketRepository.findByShowtimeId(showtimeId);
     }
+
+    public List<Ticket> getTicketsByUserId(Long userId) {
+        return ticketRepository.findByUserId(userId);
+    }
 }
