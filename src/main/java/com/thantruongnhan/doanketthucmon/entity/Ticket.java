@@ -1,5 +1,6 @@
 package com.thantruongnhan.doanketthucmon.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.thantruongnhan.doanketthucmon.entity.enums.TicketStatus;
 import java.time.LocalDateTime;
 
@@ -21,18 +22,19 @@ public class Ticket {
     private Long id;
 
     // Suất chiếu
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "showtime_id", nullable = false)
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "tickets" })
     private Showtime showtime;
 
-    // Ghế
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "seat_id", nullable = false)
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "tickets" })
     private Seat seat;
 
-    // Người đặt
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "password", "tickets" })
     private User user;
 
     // Giá tại thời điểm đặt

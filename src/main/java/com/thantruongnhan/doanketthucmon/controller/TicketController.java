@@ -85,8 +85,22 @@ public class TicketController {
 
     @GetMapping("/user/{userId}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN')")
-    public ResponseEntity<List<Ticket>> getTicketsByUserId(@PathVariable Long userId) {
-        List<Ticket> tickets = ticketService.getTicketsByUserId(userId);
-        return ResponseEntity.ok(tickets);
+    public ResponseEntity<?> getTicketsByUserId(@PathVariable Long userId) {
+        try {
+            log.info("📥 Fetching tickets for user: {}", userId);
+
+            List<Ticket> tickets = ticketService.getTicketsByUserId(userId);
+
+            log.info("✅ Found {} tickets for user {}", tickets.size(), userId);
+            return ResponseEntity.ok(tickets);
+
+        } catch (Exception e) {
+            log.error("❌ Error fetching tickets for user {}: {}", userId, e.getMessage(), e);
+
+            Map<String, String> error = new HashMap<>();
+            error.put("message", "Không thể lấy danh sách vé: " + e.getMessage());
+            error.put("error", e.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
 }

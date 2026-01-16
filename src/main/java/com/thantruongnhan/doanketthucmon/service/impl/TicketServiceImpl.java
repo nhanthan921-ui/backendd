@@ -138,7 +138,21 @@ public class TicketServiceImpl implements TicketService {
         return ticketRepository.findByShowtimeId(showtimeId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public List<Ticket> getTicketsByUserId(Long userId) {
-        return ticketRepository.findByUserId(userId);
+        try {
+            log.info("🔍 Searching tickets for user ID: {}", userId);
+
+            List<Ticket> tickets = ticketRepository.findByUserId(userId);
+
+            log.info("✅ Found {} tickets for user {}", tickets.size(), userId);
+
+            return tickets;
+
+        } catch (Exception e) {
+            log.error("❌ Error in getTicketsByUserId: {}", e.getMessage(), e);
+            throw new RuntimeException("Lỗi khi lấy danh sách vé: " + e.getMessage(), e);
+        }
     }
 }
