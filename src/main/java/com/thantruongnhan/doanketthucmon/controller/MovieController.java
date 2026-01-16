@@ -85,4 +85,28 @@ public class MovieController {
     public List<Movie> searchMovies(@RequestParam String keyword) {
         return movieService.searchMovies(keyword);
     }
+
+    // Filter movies theo genre
+    @GetMapping("/genre/{genreId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public List<Movie> getMoviesByGenre(@PathVariable Long genreId) {
+        return movieService.getMoviesByGenre(genreId);
+    }
+
+    // Filter movies theo cinema (qua showtimes)
+    @GetMapping("/cinema/{cinemaId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public List<Movie> getMoviesByCinema(@PathVariable Long cinemaId) {
+        return movieService.getMoviesByCinema(cinemaId);
+    }
+
+    // Filter movies theo cả genre VÀ cinema
+    @GetMapping("/filter")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
+    public List<Movie> getMoviesFiltered(
+            @RequestParam(required = false) Long genreId,
+            @RequestParam(required = false) Long cinemaId,
+            @RequestParam(required = false) MovieStatus status) {
+        return movieService.getMoviesFiltered(genreId, cinemaId, status);
+    }
 }
