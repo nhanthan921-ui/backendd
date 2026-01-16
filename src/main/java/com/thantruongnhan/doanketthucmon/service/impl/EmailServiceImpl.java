@@ -1,38 +1,43 @@
 package com.thantruongnhan.doanketthucmon.service.impl;
 
+import com.resend.*;
+import com.resend.services.emails.model.CreateEmailOptions;
 import com.thantruongnhan.doanketthucmon.service.EmailService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
-
+@Slf4j
 @Service
-@RequiredArgsConstructor
 public class EmailServiceImpl implements EmailService {
 
-    private final JavaMailSender mailSender;
+    @Value("${resend.api.key}")
+    private String resendApiKey;
 
     @Override
     public void sendOtpEmail(String to, String otp) {
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            Resend resend = new Resend(resendApiKey);
 
-            helper.setTo(to);
-            helper.setSubject("Mã OTP đặt lại mật khẩu");
-            helper.setText(
-                    "<h2>Mã OTP của bạn</h2>" +
-                            "<p>Mã OTP: <b>" + otp + "</b></p>" +
-                            "<p>Mã này có hiệu lực trong 5 phút.</p>",
-                    true);
+            CreateEmailOptions email = CreateEmailOptions.builder()
+                    .from("Nhan App <nhantran.13082005@gmail.com>")
+                    .to(to)
+                    .subject("Mã OTP đặt lại mật khẩu")
+                    .html("""
+                            <h2>🔐 Đặt lại mật khẩu</h2>
+                            <p>Mã OTP của bạn là:</p>
+                            <h1>%s</h1>
+                            <p>Mã có hiệu lực trong <b>5 phút</b>.</p>
+                            """.formatted(otp))
+                    .build();
 
-            mailSender.send(message);
+            resend.emails().send(email);
 
-        } catch (MessagingException e) {
-            throw new RuntimeException("Lỗi gửi email: " + e.getMessage(), e);
+            log.info("📧 Gửi OTP thành công tới {}", to);
+
+        } catch (Exception e) {
+            log.error("❌ Gửi email OTP thất bại", e);
+            throw new RuntimeException("Không thể gửi email OTP");
         }
     }
 }

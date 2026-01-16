@@ -47,6 +47,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         log.info("✅ OTP đã tạo: {}", otp);
 
+        // 🔥 QUAN TRỌNG
         emailService.sendOtpEmail(email, otp);
 
         log.info("📧 Email OTP đã gửi thành công");
