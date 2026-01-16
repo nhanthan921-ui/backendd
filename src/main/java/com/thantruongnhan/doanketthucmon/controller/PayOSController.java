@@ -66,4 +66,25 @@ public class PayOSController {
                     "details", e.getCause() != null ? e.getCause().getMessage() : "Unknown"));
         }
     }
+
+    @GetMapping("/check/{orderCode}")
+    public ResponseEntity<?> checkPaymentStatus(@PathVariable String orderCode) {
+        try {
+            System.out.println(">>> Checking payment status for order: " + orderCode);
+
+            Map<String, Object> response = payOSClient.getPaymentStatus(orderCode);
+
+            System.out.println(">>> Payment status response: " + response);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println(">>> Error checking payment status:");
+            e.printStackTrace();
+
+            return ResponseEntity.status(500).body(Map.of(
+                    "error", e.getMessage(),
+                    "details", e.getCause() != null ? e.getCause().getMessage() : "Payment not found"));
+        }
+    }
 }
