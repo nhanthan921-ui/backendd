@@ -3,6 +3,7 @@ package com.thantruongnhan.doanketthucmon.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 import com.thantruongnhan.doanketthucmon.entity.PasswordResetToken;
 import com.thantruongnhan.doanketthucmon.entity.User;
@@ -14,6 +15,7 @@ import com.thantruongnhan.doanketthucmon.service.PasswordResetService;
 import java.time.LocalDateTime;
 import java.util.Random;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PasswordResetServiceImpl implements PasswordResetService {
@@ -28,8 +30,9 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("Email không tồn tại"));
 
-        // Xoá OTP cũ nếu có
-        tokenRepository.deleteByUser(user);
+        // ✅ Xoá OTP cũ nếu có (an toàn hơn)
+        tokenRepository.findByUser(user)
+                .ifPresent(tokenRepository::delete);
 
         String otp = String.format("%06d", new Random().nextInt(999999));
 
@@ -40,6 +43,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
                 .build();
 
         tokenRepository.save(token);
+
+        // Nếu email lỗi → sẽ nổ ở đây
         emailService.sendOtpEmail(email, otp);
     }
 
