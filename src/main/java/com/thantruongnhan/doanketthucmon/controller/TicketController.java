@@ -1,7 +1,9 @@
 package com.thantruongnhan.doanketthucmon.controller;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -10,8 +12,11 @@ import com.thantruongnhan.doanketthucmon.dto.CreateTicketRequest;
 import com.thantruongnhan.doanketthucmon.entity.Ticket;
 import com.thantruongnhan.doanketthucmon.service.TicketService;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/customer/tickets")
 @RequiredArgsConstructor
@@ -34,15 +39,36 @@ public class TicketController {
 
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ResponseEntity<Ticket> createTicket(
-            @RequestBody CreateTicketRequest request) {
+    public ResponseEntity<?> createTicket(@RequestBody CreateTicketRequest request) {
+        try {
+            log.info("📥 Received create ticket request: {}", request);
 
-        Ticket ticket = ticketService.createTicket(
-                request.getShowtimeId(),
-                request.getSeatId(),
-                request.getUserId());
+            Ticket ticket = ticketService.createTicket(
+                    request.getShowtimeId(),
+                    request.getSeatId(),
+                    request.getUserId());
 
-        return ResponseEntity.ok(ticket);
+            log.info("✅ Ticket created: {}", ticket.getId());
+            return ResponseEntity.ok(ticket);
+
+        } catch (IllegalArgumentException e) {
+            log.error("❌ Bad request: {}", e.getMessage());
+            Map<String, String> error = new HashMap<>();
+            error.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+
+        } catch (IllegalStateException e) {
+            log.error("❌ Conflict: {}", e.getMessage());
+            Map<String, String> error = new HashMap<>();
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+
+        } catch (Exception e) {
+            log.error("❌ Internal error", e);
+            Map<String, String> error = new HashMap<>();
+            error.put("message", "Lỗi server: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
 
     @DeleteMapping("/{id}")
