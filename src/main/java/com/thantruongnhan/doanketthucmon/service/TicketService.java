@@ -1,12 +1,13 @@
 package com.thantruongnhan.doanketthucmon.service;
 
+import com.thantruongnhan.doanketthucmon.dto.TicketResponse;
 import com.thantruongnhan.doanketthucmon.entity.Ticket;
 
 import java.util.List;
 
 public interface TicketService {
 
-    List<Ticket> getAllTickets();
+    List<TicketResponse> getAllTickets();
 
     Ticket getTicketById(Long id);
 

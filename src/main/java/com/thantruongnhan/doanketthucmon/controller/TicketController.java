@@ -9,6 +9,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.thantruongnhan.doanketthucmon.dto.CreateTicketRequest;
+import com.thantruongnhan.doanketthucmon.dto.TicketResponse;
 import com.thantruongnhan.doanketthucmon.entity.Ticket;
 import com.thantruongnhan.doanketthucmon.service.TicketService;
 
@@ -27,7 +28,7 @@ public class TicketController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    public List<Ticket> getAllTickets() {
+    public List<TicketResponse> getAllTickets() {
         return ticketService.getAllTickets();
     }
 

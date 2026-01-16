@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.thantruongnhan.doanketthucmon.dto.TicketResponse;
 import com.thantruongnhan.doanketthucmon.entity.Seat;
 import com.thantruongnhan.doanketthucmon.entity.Showtime;
 import com.thantruongnhan.doanketthucmon.entity.Ticket;
@@ -33,8 +34,22 @@ public class TicketServiceImpl implements TicketService {
     private final UserRepository userRepository;
 
     @Override
-    public List<Ticket> getAllTickets() {
-        return ticketRepository.findAll();
+    public List<TicketResponse> getAllTickets() {
+        return ticketRepository.findAll()
+                .stream()
+                .map(t -> {
+                    TicketResponse dto = new TicketResponse();
+                    dto.setId(t.getId());
+                    dto.setShowtimeId(t.getShowtime().getId());
+                    dto.setSeatId(t.getSeat().getId());
+                    dto.setUserId(t.getUser().getId());
+                    dto.setPrice(t.getPrice());
+                    dto.setStatus(t.getStatus().name());
+                    dto.setBookedAt(t.getBookedAt());
+                    dto.setTicketCode(t.getTicketCode());
+                    return dto;
+                })
+                .toList();
     }
 
     @Override
