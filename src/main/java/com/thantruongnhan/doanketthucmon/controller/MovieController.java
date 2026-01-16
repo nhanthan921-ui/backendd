@@ -93,13 +93,6 @@ public class MovieController {
         return movieService.getMoviesByGenre(genreId);
     }
 
-    // Filter movies theo cinema (qua showtimes)
-    @GetMapping("/cinema/{cinemaId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
-    public List<Movie> getMoviesByCinema(@PathVariable Long cinemaId) {
-        return movieService.getMoviesByCinema(cinemaId);
-    }
-
     // Filter movies theo cả genre VÀ cinema
     @GetMapping("/filter")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
@@ -107,6 +100,6 @@ public class MovieController {
             @RequestParam(required = false) Long genreId,
             @RequestParam(required = false) Long cinemaId,
             @RequestParam(required = false) MovieStatus status) {
-        return movieService.getMoviesFiltered(genreId, cinemaId, status);
+        return movieService.getMoviesFiltered(genreId, null, status);
     }
 }

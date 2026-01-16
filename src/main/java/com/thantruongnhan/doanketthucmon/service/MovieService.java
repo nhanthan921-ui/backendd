@@ -29,8 +29,6 @@ public interface MovieService {
 
         List<Movie> getMoviesByGenre(Long genreId);
 
-        List<Movie> getMoviesByCinema(Long cinemaId);
-
         List<Movie> getMoviesFiltered(Long genreId, Long cinemaId, MovieStatus status);
 
 }

@@ -114,23 +114,12 @@ public class MovieServiceImpl implements MovieService {
         return movieRepository.findByGenresId(genreId);
     }
 
-    // Get movies by cinema (through showtimes)
-    public List<Movie> getMoviesByCinema(Long cinemaId) {
-        return movieRepository.findByCinemaId(cinemaId);
-    }
-
     // Filter với nhiều điều kiện
     public List<Movie> getMoviesFiltered(Long genreId, Long cinemaId, MovieStatus status) {
-        if (genreId != null && cinemaId != null && status != null) {
-            return movieRepository.findByGenresIdAndCinemaIdAndStatus(genreId, cinemaId, status);
-        } else if (genreId != null && status != null) {
+        if (genreId != null && status != null) {
             return movieRepository.findByGenresIdAndStatus(genreId, status);
-        } else if (cinemaId != null && status != null) {
-            return movieRepository.findByCinemaIdAndStatus(cinemaId, status);
         } else if (genreId != null) {
             return movieRepository.findByGenresId(genreId);
-        } else if (cinemaId != null) {
-            return movieRepository.findByCinemaId(cinemaId);
         } else if (status != null) {
             return movieRepository.findByStatus(status);
         } else {
