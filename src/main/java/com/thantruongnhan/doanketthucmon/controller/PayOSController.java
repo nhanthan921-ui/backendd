@@ -19,7 +19,14 @@ public class PayOSController {
     @PostMapping("/create")
     public ResponseEntity<?> createPayment(@RequestBody CreatePaymentRequest req) {
 
-        // ✅ Validate đầy đủ
+        System.out.println(">>> Received request:");
+        System.out.println("orderCode: " + req.getOrderCode());
+        System.out.println("amount: " + req.getAmount());
+        System.out.println("description: " + req.getDescription());
+        System.out.println("returnUrl: " + req.getReturnUrl());
+        System.out.println("cancelUrl: " + req.getCancelUrl());
+
+        // Validate
         if (req.getAmount() <= 0) {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid amount"));
         }
@@ -28,7 +35,6 @@ public class PayOSController {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid orderCode"));
         }
 
-        // ✅ KIỂM TRA returnUrl và cancelUrl
         if (req.getReturnUrl() == null || req.getReturnUrl().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "returnUrl is required"));
         }
@@ -52,8 +58,12 @@ public class PayOSController {
             Map<String, Object> response = payOSClient.createPaymentLink(payload);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            System.err.println(">>> Controller Error:");
             e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+
+            return ResponseEntity.status(500).body(Map.of(
+                    "error", e.getMessage(),
+                    "details", e.getCause() != null ? e.getCause().getMessage() : "Unknown"));
         }
     }
 }
