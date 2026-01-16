@@ -1,30 +1,42 @@
 package com.thantruongnhan.doanketthucmon.controller;
 
+import com.thantruongnhan.doanketthucmon.payos.CreatePaymentRequest;
+import com.thantruongnhan.doanketthucmon.payos.PayOSClient;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
 import java.util.HashMap;
 import java.util.Map;
 
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.thantruongnhan.doanketthucmon.payos.CreatePaymentRequest;
-import com.thantruongnhan.doanketthucmon.payos.PayOSClient;
-
 @RestController
 @RequestMapping("/api/payos")
+@RequiredArgsConstructor
 public class PayOSController {
 
-    private final PayOSClient payOsClient;
-
-    public PayOSController(PayOSClient payOSClient) {
-        this.payOsClient = payOSClient;
-    }
+    private final PayOSClient payOSClient;
 
     @PostMapping("/create")
     public ResponseEntity<?> createPayment(@RequestBody CreatePaymentRequest req) {
+
+        // ✅ Validate đầy đủ
+        if (req.getAmount() <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid amount"));
+        }
+
+        if (req.getOrderCode() <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid orderCode"));
+        }
+
+        // ✅ KIỂM TRA returnUrl và cancelUrl
+        if (req.getReturnUrl() == null || req.getReturnUrl().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "returnUrl is required"));
+        }
+
+        if (req.getCancelUrl() == null || req.getCancelUrl().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "cancelUrl is required"));
+        }
+
         Map<String, Object> payload = new HashMap<>();
         payload.put("orderCode", req.getOrderCode());
         payload.put("amount", req.getAmount());
@@ -36,9 +48,12 @@ public class PayOSController {
             payload.put("items", req.getItems());
         }
 
-        Map<String, Object> res = payOsClient.createPaymentLink(payload);
-
-        // Trả về toàn bộ response
-        return ResponseEntity.ok(res);
+        try {
+            Map<String, Object> response = payOSClient.createPaymentLink(payload);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
     }
 }

@@ -1,54 +1,62 @@
 package com.thantruongnhan.doanketthucmon.controller;
 
-import java.util.Map;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import com.thantruongnhan.doanketthucmon.payos.PayOSClient;
 import com.thantruongnhan.doanketthucmon.service.PayOSWebhookService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/payos")
+@RequiredArgsConstructor
 public class PayOSWebhookController {
 
     private final PayOSWebhookService webhookService;
-    private final PayOSClient payOSClient;
-
-    public PayOSWebhookController(PayOSWebhookService webhookService, PayOSClient payOSClient) {
-        this.webhookService = webhookService;
-        this.payOSClient = payOSClient;
-    }
 
     @PostMapping("/webhook")
     public ResponseEntity<?> handleWebhook(@RequestBody Map<String, Object> payload) {
-        try {
-            System.out.println(">>> Received PayOS webhook: " + payload);
 
-            // Verify signature nếu PayOS gửi
+        System.out.println(">>> Received PayOS webhook: " + payload);
+
+        try {
+            // 1. Lấy signature
             String signature = (String) payload.get("signature");
             Map<String, Object> data = (Map<String, Object>) payload.get("data");
 
+            if (data == null) {
+                return ResponseEntity.badRequest().body("Missing data");
+            }
+
+            // 2. Verify signature
             if (signature != null && !webhookService.verifySignature(data, signature)) {
                 return ResponseEntity.status(401).body("Invalid signature");
             }
 
-            // Xử lý webhook
-            String code = (String) data.get("code");
-            String orderCode = String.valueOf(data.get("orderCode"));
+            // 3. Parse dữ liệu
+            Long orderCode = Long.valueOf(data.get("orderCode").toString());
+            String status = (String) data.get("status"); // PAID | CANCELLED | PENDING
 
-            // 00 = success, 01 = cancelled
-            if ("01".equals(code)) {
-                System.out.println(">>> Payment cancelled for order: " + orderCode);
-                // TODO: Update order status in database
-            } else if ("00".equals(code)) {
-                System.out.println(">>> Payment success for order: " + orderCode);
-                // TODO: Update order status in database
+            System.out.println(">>> orderCode: " + orderCode);
+            System.out.println(">>> status: " + status);
+
+            // 4. Xử lý theo trạng thái
+            switch (status) {
+                case "PAID" -> {
+                    System.out.println("✅ Payment SUCCESS for ticket orderCode: " + orderCode);
+                    // TODO:
+                    // - Update Ticket status = PAID
+                    // - Generate ticketCode / QR
+                }
+                case "CANCELLED" -> {
+                    System.out.println("❌ Payment CANCELLED for ticket orderCode: " + orderCode);
+                    // TODO:
+                    // - Release seat
+                    // - Update Ticket status = CANCELLED
+                }
+                default -> {
+                    System.out.println("ℹ️ Payment status: " + status);
+                }
             }
 
             return ResponseEntity.ok(Map.of("success", true));
@@ -56,18 +64,6 @@ public class PayOSWebhookController {
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(500).body("Webhook processing failed");
-        }
-    }
-
-    // THÊM ENDPOINT NÀY
-    @GetMapping("/check-status/{orderCode}")
-    public ResponseEntity<?> checkPaymentStatus(@PathVariable String orderCode) {
-        try {
-            Map<String, Object> status = payOSClient.getPaymentStatus(orderCode);
-            return ResponseEntity.ok(status);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("error", "Cannot check payment status"));
         }
     }
 }
