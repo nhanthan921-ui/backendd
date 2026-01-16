@@ -20,7 +20,7 @@ public class EmailServiceImpl implements EmailService {
             Resend resend = new Resend(resendApiKey);
 
             CreateEmailOptions email = CreateEmailOptions.builder()
-                    .from("Nhan App <onboarding@resend.dev>")
+                    .from("Ncinema App <onboarding@resend.dev>")
                     .to(to)
                     .subject("Mã OTP đặt lại mật khẩu")
                     .html("""
