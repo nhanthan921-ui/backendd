@@ -17,8 +17,4 @@ public class PayOSItem {
 
     // Giá 1 vé (VND)
     private int price;
-
-    // (không bắt buộc nhưng RẤT NÊN CÓ)
-    // dùng để map lại Ticket trong DB
-    private Long ticketId;
 }

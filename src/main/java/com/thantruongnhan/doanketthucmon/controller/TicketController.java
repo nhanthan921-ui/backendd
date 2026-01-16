@@ -27,7 +27,7 @@ public class TicketController {
     private final TicketService ticketService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'CUSTOMER')")
     public List<TicketResponse> getAllTickets() {
         return ticketService.getAllTickets();
     }

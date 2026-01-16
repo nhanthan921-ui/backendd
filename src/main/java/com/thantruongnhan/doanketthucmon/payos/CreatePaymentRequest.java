@@ -32,8 +32,5 @@ public class CreatePaymentRequest {
 
         // Giá 1 vé
         private int price;
-
-        // RẤT QUAN TRỌNG – map lại Ticket
-        private Long ticketId;
     }
 }
