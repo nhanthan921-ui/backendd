@@ -27,10 +27,11 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     @Override
     public void sendOtp(String email) {
+        log.info("📩 Nhận yêu cầu gửi OTP cho: {}", email);
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("Email không tồn tại"));
 
-        // ✅ Xoá OTP cũ nếu có (an toàn hơn)
         tokenRepository.findByUser(user)
                 .ifPresent(tokenRepository::delete);
 
@@ -44,8 +45,11 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         tokenRepository.save(token);
 
-        // Nếu email lỗi → sẽ nổ ở đây
+        log.info("✅ OTP đã tạo: {}", otp);
+
         emailService.sendOtpEmail(email, otp);
+
+        log.info("📧 Email OTP đã gửi thành công");
     }
 
     @Override
