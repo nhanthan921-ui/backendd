@@ -71,7 +71,7 @@ public class SeatController {
     @GetMapping("/showtime/{showtimeId}")
     public ResponseEntity<List<SeatDTO>> getSeatsByShowtime(@PathVariable Long showtimeId) {
         // 1. Lấy tất cả seats của room (thông qua showtime)
-        List<Seat> allSeats = seatRepository.findByShowtime(showtimeId);
+        List<Seat> allSeats = seatRepository.findSeatsByShowtime(showtimeId);
 
         // 2. Lấy tất cả tickets của showtime này
         List<Ticket> tickets = ticketRepository.findByShowtimeId(showtimeId);
