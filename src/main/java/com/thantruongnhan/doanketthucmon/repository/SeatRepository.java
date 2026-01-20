@@ -13,7 +13,13 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
     boolean existsByRoomIdAndRowSeatAndNumber(Long roomId, String rowSeat, Integer number);
 
-    @Query("SELECT s FROM Seat s " +
-            "WHERE s.room.id = (SELECT st.room.id FROM Showtime st WHERE st.id = :showtimeId)")
-    List<Seat> findByShowtime(@Param("showtimeId") Long showtimeId);
+    @Query("""
+                SELECT s
+                FROM Seat s
+                JOIN s.room r
+                JOIN Showtime st ON st.room.id = r.id
+                WHERE st.id = :showtimeId
+            """)
+    List<Seat> findSeatsByShowtime(@Param("showtimeId") Long showtimeId);
+
 }
