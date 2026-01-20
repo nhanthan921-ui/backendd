@@ -54,21 +54,73 @@ public class TicketController {
             return ResponseEntity.ok(ticket);
 
         } catch (IllegalArgumentException e) {
-            log.error("❌ Bad request: {}", e.getMessage());
+            log.error(" Bad request: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
             error.put("message", e.getMessage());
             return ResponseEntity.badRequest().body(error);
 
         } catch (IllegalStateException e) {
-            log.error("❌ Conflict: {}", e.getMessage());
+            log.error(" Conflict: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
             error.put("message", e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
 
         } catch (Exception e) {
-            log.error("❌ Internal error", e);
+            log.error(" Internal error", e);
             Map<String, String> error = new HashMap<>();
             error.put("message", "Lỗi server: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @PutMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
+    public ResponseEntity<?> cancelTicket(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long userId) {
+        try {
+            log.info("📥 Cancel ticket request: ticketId={}, userId={}", id, userId);
+
+            Ticket ticket = ticketService.getTicketById(id);
+
+            // Kiểm tra quyền: CUSTOMER chỉ được hủy vé của mình
+            if (userId != null && !ticket.getUser().getId().equals(userId)) {
+                log.error(" User {} attempted to cancel ticket {} owned by {}",
+                        userId, id, ticket.getUser().getId());
+                Map<String, String> error = new HashMap<>();
+                error.put("message", "Bạn không có quyền hủy vé này");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            // Kiểm tra trạng thái vé
+            if ("CANCELLED".equals(ticket.getStatus())) {
+                log.warn("⚠️ Ticket {} is already cancelled", id);
+                Map<String, String> error = new HashMap<>();
+                error.put("message", "Vé đã được hủy trước đó");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            }
+
+            if ("USED".equals(ticket.getStatus())) {
+                log.warn("⚠️ Ticket {} is already used", id);
+                Map<String, String> error = new HashMap<>();
+                error.put("message", "Không thể hủy vé đã sử dụng");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            }
+
+            // Hủy vé (cập nhật status)
+            Ticket cancelledTicket = ticketService.cancelTicket(id);
+
+            log.info("Ticket {} cancelled successfully", id);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Đã hủy vé thành công");
+            response.put("ticket", cancelledTicket);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error(" Error cancelling ticket {}: {}", id, e.getMessage(), e);
+            Map<String, String> error = new HashMap<>();
+            error.put("message", "Không thể hủy vé: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
@@ -86,7 +138,7 @@ public class TicketController {
             // ADMIN có thể xóa bất kỳ vé nào
             // CUSTOMER chỉ được xóa vé của mình
             if (userId != null && !ticket.getUser().getId().equals(userId)) {
-                log.error("❌ User {} attempted to delete ticket {} owned by {}",
+                log.error(" User {} attempted to delete ticket {} owned by {}",
                         userId, id, ticket.getUser().getId());
                 Map<String, String> error = new HashMap<>();
                 error.put("message", "Bạn không có quyền xóa vé này");
@@ -103,7 +155,7 @@ public class TicketController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error deleting ticket {}: {}", id, e.getMessage(), e);
+            log.error(" Error deleting ticket {}: {}", id, e.getMessage(), e);
             Map<String, String> error = new HashMap<>();
             error.put("message", "Không thể xóa vé: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
@@ -128,7 +180,7 @@ public class TicketController {
             return ResponseEntity.ok(tickets);
 
         } catch (Exception e) {
-            log.error("❌ Error fetching tickets for user {}: {}", userId, e.getMessage(), e);
+            log.error(" Error fetching tickets for user {}: {}", userId, e.getMessage(), e);
 
             Map<String, String> error = new HashMap<>();
             error.put("message", "Không thể lấy danh sách vé: " + e.getMessage());

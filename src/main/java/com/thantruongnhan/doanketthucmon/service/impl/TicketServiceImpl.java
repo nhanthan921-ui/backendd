@@ -170,4 +170,45 @@ public class TicketServiceImpl implements TicketService {
             throw new RuntimeException("Lỗi khi lấy danh sách vé: " + e.getMessage(), e);
         }
     }
+
+    public Ticket cancelTicket(Long ticketId) {
+        log.info("🔄 Cancelling ticket: {}", ticketId);
+
+        // Tìm vé
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> {
+                    log.error("❌ Ticket not found: {}", ticketId);
+                    return new IllegalArgumentException("Không tìm thấy vé với ID: " + ticketId);
+                });
+
+        // Kiểm tra trạng thái hiện tại
+        if (ticket.getStatus() == TicketStatus.CANCELLED) {
+            log.warn("⚠️ Ticket {} is already cancelled", ticketId);
+            throw new IllegalStateException("Vé đã được hủy trước đó");
+        }
+
+        if (ticket.getStatus() == TicketStatus.USED) {
+            log.warn("⚠️ Ticket {} is already used", ticketId);
+            throw new IllegalStateException("Không thể hủy vé đã sử dụng");
+        }
+
+        // Cập nhật trạng thái thành CANCELLED
+        ticket.setStatus(TicketStatus.CANCELLED);
+
+        // Giải phóng ghế (set lại trạng thái ghế về AVAILABLE)
+        Seat seat = ticket.getSeat();
+        if (seat != null && seat.getStatus() != null) {
+            // Giả sử Seat cũng có enum SeatStatus với giá trị AVAILABLE
+            // Nếu Seat dùng String thì dùng: seat.setStatus("AVAILABLE");
+            seat.setStatus(SeatStatus.AVAILABLE); // Hoặc setAvailable(true) tùy cấu trúc
+            seatRepository.save(seat);
+            log.info("💺 Seat {} is now available again", seat.getId());
+        }
+
+        // Lưu vé đã hủy
+        Ticket cancelledTicket = ticketRepository.save(ticket);
+
+        log.info("✅ Ticket {} cancelled successfully", ticketId);
+        return cancelledTicket;
+    }
 }

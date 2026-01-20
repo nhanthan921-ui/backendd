@@ -18,4 +18,6 @@ public interface TicketService {
     List<Ticket> getTicketsByShowtime(Long showtimeId);
 
     List<Ticket> getTicketsByUserId(Long userId);
+
+    Ticket cancelTicket(Long ticketId);
 }
