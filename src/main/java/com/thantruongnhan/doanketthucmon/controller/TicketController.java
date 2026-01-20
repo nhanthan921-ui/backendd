@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.thantruongnhan.doanketthucmon.dto.CreateTicketRequest;
 import com.thantruongnhan.doanketthucmon.dto.TicketResponse;
+import com.thantruongnhan.doanketthucmon.entity.Seat;
 import com.thantruongnhan.doanketthucmon.entity.Ticket;
 import com.thantruongnhan.doanketthucmon.service.TicketService;
 
@@ -49,7 +50,7 @@ public class TicketController {
                     request.getSeatId(),
                     request.getUserId());
 
-            log.info("✅ Ticket created: {}", ticket.getId());
+            log.info("Ticket created: {}", ticket.getId());
             return ResponseEntity.ok(ticket);
 
         } catch (IllegalArgumentException e) {
@@ -74,8 +75,39 @@ public class TicketController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
-    public void deleteTicket(@PathVariable Long id) {
-        ticketService.deleteTicket(id);
+    public ResponseEntity<?> deleteTicket(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long userId) {
+        try {
+            log.info("📥 Delete ticket request: ticketId={}, userId={}", id, userId);
+
+            Ticket ticket = ticketService.getTicketById(id);
+
+            // ADMIN có thể xóa bất kỳ vé nào
+            // CUSTOMER chỉ được xóa vé của mình
+            if (userId != null && !ticket.getUser().getId().equals(userId)) {
+                log.error("❌ User {} attempted to delete ticket {} owned by {}",
+                        userId, id, ticket.getUser().getId());
+                Map<String, String> error = new HashMap<>();
+                error.put("message", "Bạn không có quyền xóa vé này");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            ticketService.deleteTicket(id);
+
+            log.info("Ticket {} deleted successfully", id);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Đã xóa vé thành công");
+            response.put("ticketId", id);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("❌ Error deleting ticket {}: {}", id, e.getMessage(), e);
+            Map<String, String> error = new HashMap<>();
+            error.put("message", "Không thể xóa vé: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
 
     @GetMapping("/showtime/{showtimeId}")
@@ -92,7 +124,7 @@ public class TicketController {
 
             List<Ticket> tickets = ticketService.getTicketsByUserId(userId);
 
-            log.info("✅ Found {} tickets for user {}", tickets.size(), userId);
+            log.info("Found {} tickets for user {}", tickets.size(), userId);
             return ResponseEntity.ok(tickets);
 
         } catch (Exception e) {
