@@ -3,7 +3,6 @@ package com.thantruongnhan.doanketthucmon.entity.enums;
 public enum SeatStatus {
     AVAILABLE("Trống"),
     SELECTED("Đang chọn"),
-    RESERVED("Đang giữ"),
     BOOKED("Đã đặt");
 
     private String displayName;
