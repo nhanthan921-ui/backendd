@@ -45,7 +45,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         tokenRepository.save(token);
 
-        log.info("✅ OTP đã tạo: {}", otp);
+        log.info(" OTP đã tạo: {}", otp);
 
         emailService.sendOtpEmail(email, otp);
 

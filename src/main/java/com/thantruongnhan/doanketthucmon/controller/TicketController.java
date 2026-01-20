@@ -73,7 +73,7 @@ public class TicketController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
     public void deleteTicket(@PathVariable Long id) {
         ticketService.deleteTicket(id);
     }
