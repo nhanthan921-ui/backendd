@@ -121,7 +121,7 @@ public class TicketServiceImpl implements TicketService {
             ticket.setTicketCode(UUID.randomUUID().toString());
 
             // ✅ 7. Cập nhật trạng thái ghế
-            seat.setStatus(SeatStatus.RESERVED);
+            seat.setStatus(SeatStatus.BOOKED);
             seatRepository.save(seat);
             log.info("✅ Seat {} status updated to RESERVED", seatId);
 
@@ -195,14 +195,13 @@ public class TicketServiceImpl implements TicketService {
         // Cập nhật trạng thái thành CANCELLED
         ticket.setStatus(TicketStatus.CANCELLED);
 
-        // Giải phóng ghế (set lại trạng thái ghế về AVAILABLE)
+        // Giải phóng ghế - set về AVAILABLE
         Seat seat = ticket.getSeat();
-        if (seat != null && seat.getStatus() != null) {
-            // Giả sử Seat cũng có enum SeatStatus với giá trị AVAILABLE
-            // Nếu Seat dùng String thì dùng: seat.setStatus("AVAILABLE");
-            seat.setStatus(SeatStatus.AVAILABLE); // Hoặc setAvailable(true) tùy cấu trúc
+        if (seat != null) {
+            seat.setStatus(SeatStatus.AVAILABLE);
             seatRepository.save(seat);
-            log.info("💺 Seat {} is now available again", seat.getId());
+            log.info("💺 Seat {} ({}{}) is now AVAILABLE",
+                    seat.getId(), seat.getRowSeat(), seat.getNumber());
         }
 
         // Lưu vé đã hủy
