@@ -22,9 +22,6 @@ public class Seat {
     @Enumerated(EnumType.STRING)
     private SeatType type; // NORMAL, VIP
 
-    @Enumerated(EnumType.STRING)
-    private SeatStatus status;
-
     @ManyToOne
     private Room room;
 }

@@ -61,7 +61,6 @@ public class TicketServiceImpl implements TicketService {
     @Override
     @Transactional
     public Ticket createTicket(Long showtimeId, Long seatId, Long userId) {
-
         try {
             log.info("🎫 Creating ticket - Showtime: {}, Seat: {}, User: {}",
                     showtimeId, seatId, userId);
@@ -80,29 +79,19 @@ public class TicketServiceImpl implements TicketService {
                         log.error("❌ Seat not found: {}", seatId);
                         return new IllegalArgumentException("Không tìm thấy ghế với ID: " + seatId);
                     });
-            log.info("✅ Seat found: {} - Status: {}", seat.getId(), seat.getStatus());
+            log.info("✅ Seat found: {}", seat.getId());
 
-            // ✅ 3. Kiểm tra status của ghế (handle null)
-            SeatStatus seatStatus = seat.getStatus();
-            if (seatStatus == null) {
-                log.warn("⚠️ Seat {} has null status, treating as AVAILABLE", seatId);
-                // Có thể set default nếu null
-                seat.setStatus(SeatStatus.AVAILABLE);
-                seatStatus = SeatStatus.AVAILABLE;
-            }
+            // ❌ XÓA PHẦN KIỂM TRA seat.getStatus() - Seat không còn trường status
+            // SeatStatus seatStatus = seat.getStatus();
+            // if (seatStatus != SeatStatus.AVAILABLE) { ... }
 
-            if (seatStatus != SeatStatus.AVAILABLE) {
-                log.error("❌ Seat {} is not available. Current status: {}", seatId, seatStatus);
-                throw new IllegalStateException("Ghế không khả dụng. Trạng thái hiện tại: " + seatStatus);
-            }
-
-            // ✅ 4. Chống đặt trùng ghế
+            // ✅ 3. Chống đặt trùng ghế cho showtime này
             if (ticketRepository.existsByShowtimeIdAndSeatId(showtimeId, seatId)) {
                 log.error("❌ Seat {} already booked for showtime {}", seatId, showtimeId);
                 throw new IllegalStateException("Ghế đã được đặt cho suất chiếu này!");
             }
 
-            // ✅ 5. Validate User
+            // ✅ 4. Validate User
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> {
                         log.error("❌ User not found: {}", userId);
@@ -110,35 +99,27 @@ public class TicketServiceImpl implements TicketService {
                     });
             log.info("✅ User found: {}", user.getId());
 
-            // ✅ 6. Tạo ticket
+            // ✅ 5. Tạo ticket
             Ticket ticket = new Ticket();
             ticket.setShowtime(showtime);
             ticket.setSeat(seat);
             ticket.setUser(user);
             ticket.setPrice(showtime.getPrice());
-            ticket.setStatus(TicketStatus.PENDING); // ✅ Đảm bảo enum này tồn tại
+            ticket.setStatus(TicketStatus.PENDING);
             ticket.setBookedAt(LocalDateTime.now());
             ticket.setTicketCode(UUID.randomUUID().toString());
 
-            // ✅ 7. Cập nhật trạng thái ghế
-            seat.setStatus(SeatStatus.BOOKED);
-            seatRepository.save(seat);
-            log.info("✅ Seat {} status updated to RESERVED", seatId);
-
-            // ✅ 8. Lưu ticket
+            // ✅ 6. Lưu ticket
             Ticket savedTicket = ticketRepository.save(ticket);
             log.info("🎉 Ticket created successfully: {}", savedTicket.getId());
 
             return savedTicket;
 
         } catch (IllegalArgumentException | IllegalStateException e) {
-            // Lỗi validation - ném lại để controller bắt
             log.error("❌ Validation error: {}", e.getMessage());
             throw e;
         } catch (Exception e) {
-            // Lỗi không mong đợi
             log.error("❌ Unexpected error creating ticket", e);
-            e.printStackTrace();
             throw new RuntimeException("Lỗi không xác định khi tạo vé: " + e.getMessage(), e);
         }
     }
@@ -171,6 +152,8 @@ public class TicketServiceImpl implements TicketService {
         }
     }
 
+    @Override
+    @Transactional
     public Ticket cancelTicket(Long ticketId) {
         log.info("🔄 Cancelling ticket: {}", ticketId);
 
@@ -192,22 +175,15 @@ public class TicketServiceImpl implements TicketService {
             throw new IllegalStateException("Không thể hủy vé đã sử dụng");
         }
 
-        // Cập nhật trạng thái thành CANCELLED
+        // ✅ CHỈ cập nhật trạng thái ticket thành CANCELLED
         ticket.setStatus(TicketStatus.CANCELLED);
-
-        // Giải phóng ghế - set về AVAILABLE
-        Seat seat = ticket.getSeat();
-        if (seat != null) {
-            seat.setStatus(SeatStatus.AVAILABLE);
-            seatRepository.save(seat);
-            log.info("💺 Seat {} ({}{}) is now AVAILABLE",
-                    seat.getId(), seat.getRowSeat(), seat.getNumber());
-        }
 
         // Lưu vé đã hủy
         Ticket cancelledTicket = ticketRepository.save(ticket);
 
-        log.info("✅ Ticket {} cancelled successfully", ticketId);
+        log.info("✅ Ticket {} cancelled successfully. Seat {} will be AVAILABLE for other showtimes automatically",
+                ticketId, ticket.getSeat().getId());
+
         return cancelledTicket;
     }
 }
